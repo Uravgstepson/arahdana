@@ -1,19 +1,34 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import { PriceChart } from "@/components/PriceChart";
 import { ScoreBreakdownChart } from "@/components/ScoreBreakdownChart";
-import type { AnalysisResult, PricePoint } from "@/lib/types/investment";
-import { formatPercent, formatRupiah } from "@/lib/utils/format";
+import type {
+  AnalysisInput,
+  AnalysisResult,
+  PricePoint,
+} from "@/lib/types/investment";
+import {
+  generateHumanExplanation,
+  type ExplanationMode,
+} from "@/lib/analysis/explanation";
+import { cn, formatPercent, formatRupiah } from "@/lib/utils/format";
 
 export function AnalyzerResult({
+  input,
   result,
   prices,
   dataSourceLabel = "Data contoh",
   isMockData = true,
 }: {
+  input: AnalysisInput;
   result: AnalysisResult;
   prices: PricePoint[];
   dataSourceLabel?: string;
   isMockData?: boolean;
 }) {
+  const [explanationMode, setExplanationMode] =
+    useState<ExplanationMode>("beginner");
   const verdictStyle =
     result.verdict === "BUY"
       ? "bg-emerald-700 text-white"
@@ -25,6 +40,11 @@ export function AnalyzerResult({
   const hasSma20 = result.trend.dataPoints >= 20 && result.trend.sma20 > 0;
   const hasSma50 = result.trend.dataPoints >= 50 && result.trend.sma50 > 0;
   const trendExplanation = buildTrendExplanation(result);
+  const humanExplanation = useMemo(
+    () => generateHumanExplanation(input, result),
+    [input, result],
+  );
+  const activeExplanation = humanExplanation[explanationMode];
 
   return (
     <section className="space-y-5">
@@ -65,6 +85,76 @@ export function AnalyzerResult({
           <p className="font-semibold">Peringatan risiko utama</p>
           <p className="mt-1">{mainRiskWarning}</p>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-stone-500">
+              Asisten penjelasan
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-stone-950">
+              Penjelasan manusiawi
+            </h2>
+          </div>
+          <div className="flex w-fit rounded-lg bg-stone-100 p-1 text-sm font-semibold">
+            <button
+              type="button"
+              onClick={() => setExplanationMode("beginner")}
+              className={cn(
+                "rounded-md px-3 py-1.5",
+                explanationMode === "beginner"
+                  ? "bg-white text-stone-950 shadow-sm"
+                  : "text-stone-600 hover:text-stone-950",
+              )}
+            >
+              Beginner
+            </button>
+            <button
+              type="button"
+              onClick={() => setExplanationMode("advanced")}
+              className={cn(
+                "rounded-md px-3 py-1.5",
+                explanationMode === "advanced"
+                  ? "bg-white text-stone-950 shadow-sm"
+                  : "text-stone-600 hover:text-stone-950",
+              )}
+            >
+              Advanced
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <ExplanationCard
+            title="Ringkasan keputusan"
+            body={activeExplanation.decisionSummary}
+          />
+          <ExplanationCard
+            title="Alasan utama"
+            items={activeExplanation.mainReasons}
+          />
+          <ExplanationCard
+            title="Risiko utama"
+            items={activeExplanation.mainRisks}
+          />
+          <ExplanationCard
+            title="Kapan jangan beli"
+            items={activeExplanation.doNotBuy}
+            tone="risk"
+          />
+          <div className="lg:col-span-2">
+            <ExplanationCard
+              title="Rencana tindakan"
+              items={activeExplanation.actionPlan}
+              tone="action"
+            />
+          </div>
+        </div>
+        <p className="mt-4 rounded-lg bg-amber-50 p-4 text-sm leading-6 text-amber-950 ring-1 ring-amber-100">
+          Penjelasan ini dibuat dari aturan analisis ArahDana dan data historis
+          yang tersedia. Tidak ada API AI berbayar, dan tidak ada jaminan
+          keuntungan.
+        </p>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
@@ -197,6 +287,39 @@ function Info({ title, body }: { title: string; body: string }) {
     <div className="rounded-lg border border-stone-200 p-4">
       <p className="text-sm font-semibold text-stone-950">{title}</p>
       <p className="mt-2 text-sm leading-6 text-stone-600">{body}</p>
+    </div>
+  );
+}
+
+function ExplanationCard({
+  title,
+  body,
+  items,
+  tone = "neutral",
+}: {
+  title: string;
+  body?: string;
+  items?: string[];
+  tone?: "neutral" | "risk" | "action";
+}) {
+  const toneClass =
+    tone === "risk"
+      ? "border-rose-100 bg-rose-50 text-rose-950"
+      : tone === "action"
+        ? "border-emerald-100 bg-emerald-50 text-emerald-950"
+        : "border-stone-200 bg-white text-stone-700";
+
+  return (
+    <div className={`rounded-lg border p-4 ${toneClass}`}>
+      <h3 className="font-semibold text-stone-950">{title}</h3>
+      {body ? <p className="mt-2 text-sm leading-6">{body}</p> : null}
+      {items ? (
+        <ul className="mt-2 space-y-2 text-sm leading-6">
+          {items.map((item) => (
+            <li key={item}>- {item}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

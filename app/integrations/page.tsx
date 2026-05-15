@@ -1,5 +1,6 @@
 import { ApiTestPanel } from "@/components/ApiTestPanel";
 import { IntegrationCard } from "@/components/IntegrationCard";
+import { IntegrationsCsvImport } from "@/components/IntegrationsCsvImport";
 
 export default function IntegrationsPage() {
   const cards = [
@@ -17,9 +18,9 @@ export default function IntegrationsPage() {
     },
     {
       title: "Impor Bibit dan tabungan semi-otomatis",
-      status: "Aktif lokal",
+      status: "CSV browser-only",
       description:
-        "Halaman portofolio bisa membaca CSV yang ditempel atau baris tabel dari Bibit, spreadsheet, dan catatan tabungan. Sistem mendeteksi nama produk, ticker, unit, NAV/harga, saldo, sumber, tanggal, dan catatan sebelum menyimpan ke localStorage.",
+        "CSV holdings dibaca di browser, dipratinjau, divalidasi, lalu disimpan ke Supabase saat login atau localStorage saat belum login.",
     },
     {
       title: "Login langsung bank/e-wallet/Bibit",
@@ -39,6 +40,7 @@ export default function IntegrationsPage() {
           agar data portofolio dan tabungan bisa ditinjau sebelum disimpan.
         </p>
       </section>
+      <IntegrationsCsvImport />
       <ApiTestPanel />
       <div className="grid gap-4 md:grid-cols-2">
         {cards.map((card) => (

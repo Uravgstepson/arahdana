@@ -19,16 +19,18 @@ export function AllocationChart({
   description,
   data,
   emptyMessage = "Belum ada data alokasi.",
+  compact = false,
 }: {
   title?: string;
   description?: string;
   data: AllocationDatum[];
   emptyMessage?: string;
+  compact?: boolean;
 }) {
   const chartData = useMemo(() => normalizeData(data), [data]);
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
       <div>
         <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
         {description ? <p className="mt-1 text-sm text-stone-500">{description}</p> : null}
@@ -39,11 +41,11 @@ export function AllocationChart({
           {emptyMessage}
         </div>
       ) : (
-        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(260px,1fr)]">
-          <MeasuredChartFrame className="h-64 min-w-0">
+        <div className={compact ? "mt-5 grid gap-4 sm:grid-cols-[13rem_1fr]" : "mt-5 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(260px,1fr)]"}>
+          <MeasuredChartFrame className={compact ? "h-48 min-w-0" : "h-64 min-w-0"}>
             {({ width, height }) => (
                 <PieChart width={width} height={height}>
-                  <Pie data={chartData} dataKey="value" nameKey="label" innerRadius="58%" outerRadius="86%" paddingAngle={3}>
+                  <Pie data={chartData} dataKey="value" nameKey="label" innerRadius="58%" outerRadius="86%" paddingAngle={3} isAnimationActive={false}>
                     {chartData.map((item, index) => (
                       <Cell key={item.key} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -52,9 +54,9 @@ export function AllocationChart({
                 </PieChart>
             )}
           </MeasuredChartFrame>
-          <div className="grid content-center gap-3">
+          <div className="grid content-center gap-2">
             {chartData.map((item, index) => (
-              <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-stone-100 p-3">
+              <div key={item.key} className="flex items-center justify-between gap-3 rounded-[1.1rem] bg-stone-100 p-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                   <span className="truncate text-sm font-semibold text-stone-950">{item.label}</span>

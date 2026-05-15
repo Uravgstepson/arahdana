@@ -1,9 +1,5 @@
-import { AccountPanel } from "@/components/AccountPanel";
+import { redirect } from "next/navigation";
 
 export default function ProfilePage() {
-  return (
-    <div className="grid max-w-4xl gap-5">
-      <AccountPanel />
-    </div>
-  );
+  redirect("/settings");
 }

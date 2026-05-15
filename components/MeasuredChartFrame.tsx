@@ -56,7 +56,7 @@ export function MeasuredChartFrame({
   }, []);
 
   return (
-    <div ref={chartRef} className={className}>
+    <div ref={chartRef} className={`${className} touch-pan-y`}>
       {size.width > 0 && size.height > 0 ? children(size) : <ChartSkeleton />}
     </div>
   );

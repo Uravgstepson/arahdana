@@ -28,8 +28,11 @@ const headerAliases: Record<string, keyof ImportedPortfolioItem | "source" | "cu
   "avg price": "buyPrice",
   balance: "currentValue",
   "buy date": "buyDate",
+  buy_date: "buyDate",
   "buy price": "buyPrice",
+  buy_price: "buyPrice",
   "buy value": "buyValue",
+  buy_value: "buyValue",
   category: "type",
   date: "buyDate",
   "harga beli": "buyPrice",
@@ -55,8 +58,10 @@ const headerAliases: Record<string, keyof ImportedPortfolioItem | "source" | "cu
   price: "currentPrice",
   produk: "name",
   quantity: "quantity",
+  qty: "quantity",
   risk: "riskCategory",
   "risk category": "riskCategory",
+  risk_category: "riskCategory",
   "risk profil": "riskCategory",
   saldo: "currentValue",
   source: "source",
@@ -71,6 +76,10 @@ const headerAliases: Record<string, keyof ImportedPortfolioItem | "source" | "cu
   transaksi: "notes",
   unit: "quantity",
   units: "quantity",
+  "current price": "currentPrice",
+  current_price: "currentPrice",
+  "current value": "currentValue",
+  current_value: "currentValue",
 };
 
 export function parsePortfolioImport(input: string): PortfolioImportResult {
@@ -93,6 +102,19 @@ export function parsePortfolioImport(input: string): PortfolioImportResult {
   const items: ImportedPortfolioItem[] = [];
   const errors: string[] = [];
   const warnings: string[] = [];
+
+  if (hasHeader) {
+    const missingColumns = getMissingRequiredColumns(headers);
+    if (missingColumns.length > 0) {
+      errors.push(
+        `Format CSV belum sesuai. Kolom wajib: name, buy_price, quantity, current_price. Kolom yang belum ada: ${missingColumns.join(", ")}.`,
+      );
+    }
+  } else if (rows[0].length < 6 || looksLikeUnsupportedHeader(rows[0])) {
+    errors.push(
+      "Format CSV belum sesuai. Gunakan header: name,type,ticker,buy_price,quantity,current_price,buy_date,notes.",
+    );
+  }
 
   dataRows.forEach((row, index) => {
     const rowNumber = hasHeader ? index + 2 : index + 1;
@@ -230,11 +252,33 @@ function normalizeKey(value: string) {
   return value
     .trim()
     .toLowerCase()
+    .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
 }
 
 function mapHeader(key: string) {
   return headerAliases[key] ?? null;
+}
+
+function looksLikeUnsupportedHeader(row: string[]) {
+  const hasHeaderText = row.some((cell) => /[a-z_ -]/i.test(cell));
+  const hasExpectedNumericValues = row
+    .slice(3, 6)
+    .some((cell) => parseFlexibleNumber(cell) > 0);
+
+  return hasHeaderText && !hasExpectedNumericValues;
+}
+
+function getMissingRequiredColumns(headers: Array<keyof ImportedPortfolioItem | "source" | "currentValue" | "buyValue" | null>) {
+  const headerSet = new Set(headers.filter(Boolean));
+  const missing: string[] = [];
+
+  if (!headerSet.has("name")) missing.push("name");
+  if (!headerSet.has("buyPrice") && !headerSet.has("buyValue")) missing.push("buy_price");
+  if (!headerSet.has("quantity") && !headerSet.has("currentValue")) missing.push("quantity");
+  if (!headerSet.has("currentPrice") && !headerSet.has("currentValue")) missing.push("current_price");
+
+  return missing;
 }
 
 function parseFlexibleNumber(value?: string) {
@@ -283,7 +327,20 @@ function inferInvestmentType(type?: string, name?: string, ticker?: string): Inv
     return "cash_savings";
   }
 
+  if (value.includes("equity_fund") || value.includes("reksadana saham") || value.includes("equity fund")) {
+    return "equity_fund";
+  }
+
+  if (value.includes("bond_fund") || value.includes("pendapatan tetap") || value.includes("rdpt") || value.includes("bond fund")) {
+    return "bond_fund";
+  }
+
+  if (value.includes("mixed_fund") || value.includes("campuran") || value.includes("mixed")) {
+    return "mixed_fund";
+  }
+
   if (
+    value.includes("money_market_fund") ||
     value.includes("pasar uang") ||
     value.includes("rdpu") ||
     value.includes("money market") ||
@@ -294,18 +351,6 @@ function inferInvestmentType(type?: string, name?: string, ticker?: string): Inv
 
   if (value.includes("reksadana")) {
     return "money_market_fund";
-  }
-
-  if (value.includes("pendapatan tetap") || value.includes("rdpt") || value.includes("bond fund")) {
-    return "bond_fund";
-  }
-
-  if (value.includes("campuran") || value.includes("mixed")) {
-    return "mixed_fund";
-  }
-
-  if (value.includes("reksadana saham") || value.includes("equity fund")) {
-    return "equity_fund";
   }
 
   if (value.includes("obligasi") || value.includes("bond") || value.includes("fr0")) {
@@ -340,11 +385,17 @@ function normalizeTicker(value?: string) {
 function normalizeDate(value?: string) {
   if (!value) return null;
   const trimmed = value.trim();
-  const parsed = new Date(trimmed);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const date = new Date(Date.UTC(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3])));
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  }
 
   const match = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
-  if (!match) return null;
+  if (!match) {
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+  }
 
   const day = Number(match[1]);
   const month = Number(match[2]) - 1;

@@ -1,279 +1,158 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
-import { clampNumber, cn } from "@/lib/utils/format";
+import { cn } from "@/lib/utils/format";
 
-const nav = [
-  { href: "/dashboard", label: "Dasbor", shortLabel: "Dasbor", icon: "DB" },
-  { href: "/portfolio", label: "Portofolio", shortLabel: "Porto", icon: "PF" },
-  { href: "/analyzer", label: "Analisis", shortLabel: "Analisis", icon: "AN" },
-  { href: "/watchlist", label: "Pantauan", shortLabel: "Pantau", icon: "WL" },
-  { href: "/market-prices", label: "Harga Pasar", shortLabel: "Pasar", icon: "MK" },
-  { href: "/settings", label: "Pengaturan", shortLabel: "Setelan", icon: "ST" },
-  { href: "/integrations", label: "Integrasi", shortLabel: "Integrasi", icon: "IN" },
-  { href: "/profile", label: "Akun", shortLabel: "Akun", icon: "AK" },
-  { href: "/login", label: "Login", shortLabel: "Login", icon: "LG" },
+type NavItem = {
+  href: string;
+  label: string;
+  shortLabel: string;
+  icon: "home" | "portfolio" | "analyzer" | "watchlist" | "settings" | "market" | "integrations";
+};
+
+const primaryNav: NavItem[] = [
+  { href: "/dashboard", label: "Dasbor", shortLabel: "Home", icon: "home" },
+  { href: "/portfolio", label: "Portofolio", shortLabel: "Porto", icon: "portfolio" },
+  { href: "/analyzer", label: "Analisis", shortLabel: "Analisis", icon: "analyzer" },
+  { href: "/watchlist", label: "Pantauan", shortLabel: "Pantau", icon: "watchlist" },
+  { href: "/settings", label: "Profil", shortLabel: "Saya", icon: "settings" },
 ];
 
-const primaryNav = nav.slice(0, 3);
-const secondaryNav = nav.slice(3);
+const desktopExtras: NavItem[] = [
+  { href: "/market-prices", label: "Harga Pasar", shortLabel: "Pasar", icon: "market" },
+  { href: "/integrations", label: "Integrasi", shortLabel: "Integrasi", icon: "integrations" },
+];
 
 export function Sidebar() {
-  const router = useRouter();
   const pathname = usePathname();
-  const [isMoreNavOpen, setIsMoreNavOpen] = useState(false);
-  const [isDraggingPrimaryNav, setIsDraggingPrimaryNav] = useState(false);
-  const [previewPrimaryNav, setPreviewPrimaryNav] = useState<{
-    href?: string;
-    position: number;
-  } | null>(null);
-  const primaryNavRef = useRef<HTMLDivElement | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const primaryDragStartX = useRef<number | null>(null);
-  const primaryDragMoved = useRef(false);
-  const suppressPrimaryClick = useRef(false);
-
-  const activePrimaryIndex = primaryNav.findIndex((item) => item.href === pathname);
-  const previewPosition =
-    previewPrimaryNav && previewPrimaryNav.href !== pathname
-      ? previewPrimaryNav.position
-      : null;
-  const indicatorPosition =
-    previewPosition ?? (activePrimaryIndex >= 0 ? activePrimaryIndex : null);
-
-  function rememberTouchStart(event: React.TouchEvent) {
-    touchStartY.current = event.touches[0]?.clientY ?? null;
-  }
-
-  function handleTouchEnd(event: React.TouchEvent) {
-    const startY = touchStartY.current;
-    touchStartY.current = null;
-    const endY = event.changedTouches[0]?.clientY;
-    if (startY === null || endY === undefined) return;
-
-    const travel = endY - startY;
-    if (travel < -24) setIsMoreNavOpen(true);
-    if (travel > 24) setIsMoreNavOpen(false);
-  }
-
-  function getPrimaryNavPosition(clientX: number) {
-    const navElement = primaryNavRef.current;
-    if (!navElement) return { index: activePrimaryIndex >= 0 ? activePrimaryIndex : 0, position: 0 };
-
-    const rect = navElement.getBoundingClientRect();
-    const horizontalPadding = 6;
-    const segmentWidth = Math.max(1, (rect.width - horizontalPadding * 2) / primaryNav.length);
-    const centeredX = clientX - rect.left - horizontalPadding - segmentWidth / 2;
-    const position = clampNumber(centeredX / segmentWidth, 0, primaryNav.length - 1);
-    const index = Math.round(position);
-
-    return { index, position };
-  }
-
-  function handlePrimaryPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-
-    // If the user tapped/clicked a nav button, let the button click win.
-    // Capturing the pointer on the container can swallow the click on mobile.
-    const target = event.target as HTMLElement | null;
-    if (target?.closest?.("[data-primary-nav-item='true']")) {
-      return;
-    }
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    primaryDragStartX.current = event.clientX;
-    primaryDragMoved.current = false;
-    setIsDraggingPrimaryNav(true);
-    setPreviewPrimaryNav({ position: getPrimaryNavPosition(event.clientX).position });
-  }
-
-  function handlePrimaryPointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    if (!isDraggingPrimaryNav) return;
-
-    const startX = primaryDragStartX.current;
-    if (startX !== null && Math.abs(event.clientX - startX) > 6) {
-      primaryDragMoved.current = true;
-    }
-
-    setPreviewPrimaryNav({ position: getPrimaryNavPosition(event.clientX).position });
-  }
-
-  function handlePrimaryPointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    if (!isDraggingPrimaryNav) return;
-
-    const { index } = getPrimaryNavPosition(event.clientX);
-    const wasDragging = primaryDragMoved.current;
-    primaryDragStartX.current = null;
-    primaryDragMoved.current = false;
-    setIsDraggingPrimaryNav(false);
-
-    if (!wasDragging) {
-      setPreviewPrimaryNav(null);
-      return;
-    }
-
-    suppressPrimaryClick.current = true;
-    const item = primaryNav[index];
-    if (!item) return;
-
-    setPreviewPrimaryNav({ href: item.href, position: index });
-    router.push(item.href);
-  }
-
-  function handlePrimaryNavClick(index: number) {
-    if (suppressPrimaryClick.current) {
-      suppressPrimaryClick.current = false;
-      return;
-    }
-
-    const item = primaryNav[index];
-    if (!item) return;
-
-    setPreviewPrimaryNav({ href: item.href, position: index });
-    router.push(item.href);
-  }
+  const desktopNav = [...primaryNav, ...desktopExtras];
 
   return (
-    <aside className="motion-nav pointer-events-none fixed inset-x-3 bottom-3 z-50 lg:pointer-events-auto lg:inset-y-6 lg:left-5 lg:right-auto lg:bottom-auto lg:w-64 lg:rounded-[2rem] lg:border lg:border-white/30 lg:bg-white/54 lg:px-4 lg:py-5 lg:shadow-sm lg:backdrop-blur-3xl">
-      <Link href="/dashboard" className="hidden items-center gap-3 lg:flex">
-        <span className="grid h-12 w-12 place-items-center rounded-[1.35rem] bg-emerald-700 text-lg font-bold text-white shadow-sm">
+    <>
+      <aside className="motion-nav fixed inset-y-5 left-5 z-50 hidden w-[5.5rem] flex-col items-center rounded-[1.8rem] border border-white/45 bg-white/58 px-2 py-4 shadow-sm backdrop-blur-3xl lg:flex">
+        <Link
+          href="/dashboard"
+          className="grid h-12 w-12 place-items-center rounded-[1.2rem] bg-emerald-700 text-sm font-bold text-white shadow-sm"
+          aria-label="ArahDana dashboard"
+        >
           AD
-        </span>
-        <div>
-          <p className="text-lg font-semibold text-stone-950">ArahDana</p>
-          <p className="text-xs text-stone-500">Pendukung keputusan</p>
-        </div>
-      </Link>
+        </Link>
 
-      <nav className="hidden lg:mt-8 lg:flex lg:flex-col lg:gap-2">
-        {nav.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
+        <nav className="mt-7 flex flex-1 flex-col items-center gap-2" aria-label="Navigasi utama">
+          {desktopNav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={item.label}
+              aria-label={item.label}
               className={cn(
-                "motion-link flex min-w-0 items-center justify-start gap-3 rounded-[1.4rem] px-3 py-3 text-sm font-semibold transition",
-              pathname === item.href
-                ? "bg-white/80 text-stone-950 shadow-sm"
-                : "text-stone-500 hover:bg-white/60 hover:text-stone-950",
-            )}
-          >
-            <span
-              className={cn(
-                "grid h-8 w-8 place-items-center rounded-full text-[0.68rem] font-bold",
+                "motion-link group grid h-12 w-12 place-items-center rounded-[1.15rem] text-stone-500",
                 pathname === item.href
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-black/[0.04]",
+                  ? "bg-stone-950 text-white shadow-sm"
+                  : "hover:bg-white/72 hover:text-stone-950",
               )}
             >
-              {item.icon}
-            </span>
-            <span className="truncate">{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-
-      <div className="pointer-events-auto mx-auto max-w-[25rem] lg:hidden">
-        <div
-          className="mb-2"
-          onTouchStart={rememberTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          {isMoreNavOpen ? (
-            <nav
-              aria-label="Navigasi lainnya"
-              className="motion-drawer no-scrollbar flex snap-x gap-1.5 overflow-x-auto rounded-full border border-white/35 bg-white/38 p-1 shadow-[0_12px_36px_rgba(15,23,42,0.12)] backdrop-blur-3xl"
-            >
-              {secondaryNav.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setIsMoreNavOpen(false)}
-                  className={cn(
-                    "motion-link flex min-h-8 min-w-[5.45rem] snap-start items-center justify-center rounded-full px-3 text-[0.72rem] font-semibold",
-                    pathname === item.href
-                      ? "bg-white/92 text-stone-950 shadow-[0_5px_16px_rgba(15,23,42,0.14)] ring-1 ring-white/80"
-                      : "text-stone-600 hover:bg-white/54",
-                  )}
-                >
-                  {item.shortLabel}
-                </Link>
-              ))}
-            </nav>
-          ) : (
-            <button
-              type="button"
-              aria-label="Tampilkan navigasi lainnya"
-              aria-expanded={isMoreNavOpen}
-              onClick={() => setIsMoreNavOpen(true)}
-              className="motion-handle mx-auto flex h-6 w-24 items-center justify-center rounded-full border border-white/35 bg-white/38 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-3xl"
-            >
-              <span className="h-1 w-12 rounded-full bg-stone-400/70" />
-            </button>
-          )}
-        </div>
-        <nav
-          aria-label="Navigasi utama"
-          className="motion-capsule relative grid grid-cols-3 rounded-full border border-white/40 bg-white/68 p-1.5 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-3xl"
-          ref={primaryNavRef}
-          onPointerDown={handlePrimaryPointerDown}
-          onPointerMove={handlePrimaryPointerMove}
-          onPointerUp={handlePrimaryPointerUp}
-          onPointerCancel={() => {
-            primaryDragStartX.current = null;
-            primaryDragMoved.current = false;
-            setIsDraggingPrimaryNav(false);
-          }}
-        >
-          {indicatorPosition !== null ? (
-            <span
-              className={cn(
-                "pointer-events-none absolute bottom-1.5 top-1.5 rounded-full bg-stone-950 shadow-[0_8px_24px_rgba(15,23,42,0.22)]",
-                isDraggingPrimaryNav
-                  ? "transition-none"
-                  : "transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
-              )}
-              style={{
-                left: "0.375rem",
-                width: "calc((100% - 0.75rem) / 3)",
-                transform: `translateX(${indicatorPosition * 100}%)`,
-              }}
-            />
-          ) : null}
-          {primaryNav.map((item, index) => {
-            const isActive =
-              (previewPosition === null && activePrimaryIndex === index) ||
-              Math.round(indicatorPosition ?? -1) === index;
-
-            return (
-              <button
-                key={item.href}
-                type="button"
-                data-primary-nav-item="true"
-                onClick={() => handlePrimaryNavClick(index)}
-                className={cn(
-                  "motion-link relative z-10 flex min-h-12 min-w-0 items-center justify-center rounded-full px-2 text-[0.78rem] font-semibold transition",
-                  isActive
-                    ? "text-white"
-                    : "text-stone-500 hover:bg-white/56 hover:text-stone-950",
-                )}
-              >
-                <span className="truncate">{item.shortLabel}</span>
-              </button>
-            );
-          })}
+              <NavGlyph icon={item.icon} />
+            </Link>
+          ))}
         </nav>
-      </div>
 
-      <div className="mt-8 hidden rounded-[1.6rem] bg-white/48 p-4 text-xs leading-5 text-stone-500 ring-1 ring-white/60 lg:block">
-        Impor portofolio semi-otomatis tersimpan lokal. Kredensial bank,
-        e-wallet, atau Bibit tidak diminta maupun disimpan.
-      </div>
-      <p className="mt-4 hidden px-2 text-[0.68rem] font-medium tracking-[0.08em] text-stone-400 lg:block">
-        {APP_VERSION_LABEL}
-      </p>
-    </aside>
+        <p className="writing-vertical hidden text-[0.62rem] font-semibold tracking-[0.18em] text-stone-400 xl:block">
+          {APP_VERSION_LABEL}
+        </p>
+      </aside>
+
+      <nav
+        aria-label="Navigasi utama"
+        className="motion-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-5 rounded-[1.6rem] border border-white/55 bg-white/76 p-1.5 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-3xl lg:hidden"
+      >
+        {primaryNav.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-label={item.label}
+              className={cn(
+                "motion-link flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.15rem] px-1 text-[0.68rem] font-semibold",
+                isActive
+                  ? "bg-stone-950 text-white shadow-sm"
+                  : "text-stone-500 active:bg-stone-100",
+              )}
+            >
+              <NavGlyph icon={item.icon} />
+              <span className="truncate">{item.shortLabel}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
+  );
+}
+
+function NavGlyph({ icon }: { icon: NavItem["icon"] }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 2,
+  };
+
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24">
+      {icon === "home" ? (
+        <>
+          <path {...common} d="M4 10.5 12 4l8 6.5" />
+          <path {...common} d="M6.5 10v9h11v-9" />
+        </>
+      ) : null}
+      {icon === "portfolio" ? (
+        <>
+          <path {...common} d="M5 8.5h14v10H5z" />
+          <path {...common} d="M9 8.5V6h6v2.5" />
+          <path {...common} d="M8 14h8" />
+        </>
+      ) : null}
+      {icon === "analyzer" ? (
+        <>
+          <path {...common} d="M5 18V8" />
+          <path {...common} d="M10 18V5" />
+          <path {...common} d="M15 18v-7" />
+          <path {...common} d="M20 18V9" />
+        </>
+      ) : null}
+      {icon === "watchlist" ? (
+        <>
+          <path {...common} d="M5 6h14" />
+          <path {...common} d="M5 12h14" />
+          <path {...common} d="M5 18h9" />
+          <path {...common} d="m17 17 1.5 1.5L22 15" />
+        </>
+      ) : null}
+      {icon === "settings" ? (
+        <>
+          <circle {...common} cx="12" cy="8" r="3" />
+          <path {...common} d="M5.5 20c1.2-3 3.4-4.5 6.5-4.5s5.3 1.5 6.5 4.5" />
+        </>
+      ) : null}
+      {icon === "market" ? (
+        <>
+          <path {...common} d="M4 18h16" />
+          <path {...common} d="m5 14 4-4 3 3 6-7" />
+        </>
+      ) : null}
+      {icon === "integrations" ? (
+        <>
+          <path {...common} d="M8 8h8v8H8z" />
+          <path {...common} d="M4 12h4" />
+          <path {...common} d="M16 12h4" />
+          <path {...common} d="M12 4v4" />
+          <path {...common} d="M12 16v4" />
+        </>
+      ) : null}
+    </svg>
   );
 }

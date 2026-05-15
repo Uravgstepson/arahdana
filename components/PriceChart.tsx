@@ -16,7 +16,7 @@ type ChartPoint = {
 export function PriceChart({
   prices,
   isMockData,
-  sourceLabel,
+  sourceLabel: _sourceLabel,
 }: {
   prices: PricePoint[];
   isMockData: boolean;
@@ -32,18 +32,16 @@ export function PriceChart({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">Grafik harga</h2>
-          <p className="mt-1 text-sm text-stone-500">
-            Close price dengan moving average untuk membaca kekuatan tren.
-          </p>
         </div>
         <span
+          title={_sourceLabel}
           className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
             isMockData
               ? "bg-amber-50 text-amber-800 ring-amber-200"
               : "bg-emerald-50 text-emerald-700 ring-emerald-200"
           }`}
         >
-          {isMockData ? "Mock" : "Live/manual"} - {sourceLabel}
+          {isMockData ? "Mock" : "Live/manual"}
         </span>
       </div>
 
@@ -76,7 +74,8 @@ export function PriceChart({
                   stroke="#087f5b"
                   strokeWidth={2.4}
                   dot={false}
-                  activeDot={{ r: 5 }}
+                  activeDot={{ r: 4 }}
+                  isAnimationActive={false}
                 />
                 {showSma20 ? (
                   <Line
@@ -87,6 +86,7 @@ export function PriceChart({
                     strokeWidth={1.8}
                     dot={false}
                     connectNulls={false}
+                    isAnimationActive={false}
                   />
                 ) : null}
                 {showSma50 ? (
@@ -98,6 +98,7 @@ export function PriceChart({
                     strokeWidth={1.8}
                     dot={false}
                     connectNulls={false}
+                    isAnimationActive={false}
                   />
                 ) : null}
               </LineChart>

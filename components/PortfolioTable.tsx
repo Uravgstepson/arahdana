@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  type ChangeEvent,
   type FormEvent,
   type ReactNode,
   useEffect,
@@ -14,7 +13,6 @@ import type {
   PortfolioItem,
   RiskCategory,
 } from "@/lib/types/investment";
-import { parsePortfolioImport } from "@/lib/import/portfolioImport";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import {
   dataSourceLabel,
@@ -27,8 +25,8 @@ import {
   investmentTypeLabel,
   nonNegativeNumber,
 } from "@/lib/utils/format";
-import type { CellValue } from "read-excel-file/browser";
 import { AllocationChart } from "@/components/AllocationChart";
+import { CsvPortfolioImportSection } from "@/components/CsvPortfolioImportSection";
 import { useAuth } from "@/components/AuthProvider";
 import { RiskBadge } from "@/components/RiskBadge";
 import { InstrumentBadge } from "@/components/InstrumentBadge";
@@ -37,24 +35,6 @@ import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
 import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
 
 type PortfolioForm = Omit<PortfolioItem, "id">;
-
-const portfolioImportExample = `sumber,nama,jenis,kode,harga beli,unit,nav,tanggal,catatan
-Market,BBCA,saham,BBCA,9800,100,9700,2026-05-01,Bank Central Asia Tbk. [Google Finance: ✓ Aktif]
-Market,BBRI,saham,BBRI,5200,300,5050,2026-05-01,Bank Rakyat Indonesia Tbk. [Coba BBRI:IDX]
-Market,TLKM,saham,TLKM,3200,200,3150,2026-05-01,Telkom Indonesia Tbk. [Coba TLKM:IDX]
-Market,ASII,saham,ASII,6500,150,6400,2026-05-01,Astra International Tbk. [Coba ASII:IDX]
-Market,GOTO,saham,GOTO,250,10000,245,2026-05-01,GoTo Gojek Tokopedia Tbk. [Coba GOTO:IDX]
-Market,UNVR,saham,UNVR,7850,60,7780,2026-05-01,Unilever Indonesia Tbk. [Coba UNVR:IDX]
-Market,ADRO,saham,ADRO,2000,400,1980,2026-05-01,Adaro Energy Indonesia Tbk. [Coba ADRO:IDX]
-Mutual,Sucorinvest Money Market Fund,pasar uang,,1000,5000,1015,2026-05-01,Reksa Dana Pasar Uang populer
-Mutual,Batavia Dana Kas Maxima,pasar uang,,1000,4800,1014,2026-05-01,Reksa Dana Pasar Uang populer
-Mutual,Mandiri Investa Pasar Uang,pasar uang,,1000,4700,1013,2026-05-01,Reksa Dana Pasar Uang populer
-Mutual,Bahana Dana Likuid,pasar uang,,1000,4500,1012,2026-05-01,Reksa Dana Pasar Uang populer
-Mutual,Danareksa Seruni Pasar Uang,pasar uang,,1000,5200,1016,2026-05-01,Reksa Dana Pasar Uang populer
-Mutual,Schroder Dana Prestasi Plus,reksadana saham,,2800,900,2925,2026-05-01,Reksa Dana Saham populer
-Mutual,BNP Paribas Pesona,reksadana saham,,2400,850,2520,2026-05-01,Reksa Dana Saham populer
-Mutual,Manulife Saham Andalan,reksadana saham,,2100,1100,2250,2026-05-01,Reksa Dana Saham populer
-Mutual,Ashmore Dana Ekuitas Nusantara,reksadana saham,,1800,1400,1920,2026-05-01,Reksa Dana Saham populer`;
 
 export function PortfolioTable() {
   const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
@@ -73,18 +53,7 @@ export function PortfolioTable() {
   const [isLookingUpFormPrice, setIsLookingUpFormPrice] = useState(false);
   const [formLookupMessage, setFormLookupMessage] = useState("");
   const [formLookupError, setFormLookupError] = useState("");
-  const [importText, setImportText] = useState("");
-  const [replaceMatchingImports, setReplaceMatchingImports] = useState(true);
-  const [importMessage, setImportMessage] = useState("");
-  const [importFileMessage, setImportFileMessage] = useState("");
-  const [importFileError, setImportFileError] = useState("");
-  const [isReadingImportFile, setIsReadingImportFile] = useState(false);
   const [syncMessage, setSyncMessage] = useState("Memuat mode penyimpanan...");
-
-  const importPreview = useMemo(
-    () => parsePortfolioImport(importText),
-    [importText],
-  );
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -414,97 +383,13 @@ export function PortfolioTable() {
     }
   }
 
-  function importParsedRows() {
-    setImportMessage("");
-
-    if (importPreview.items.length === 0) {
-      setImportMessage(
-        "Belum ada baris valid untuk diimpor. Tempel baris dengan minimal nama, harga atau saldo, dan unit.",
-      );
-      return;
-    }
-
-    setHasStoredPortfolio(true);
-    setItems((current) => {
-      const next = [...getWritablePortfolioBase(current, hasStoredPortfolio)];
-      const additions: PortfolioItem[] = [];
-
-      importPreview.items.forEach((importedItem) => {
-        const matchIndex = replaceMatchingImports
-          ? next.findIndex((item) => isSameHolding(item, importedItem))
-          : -1;
-        const normalized = normalizePortfolioItem({
-          ...importedItem,
-          id: matchIndex >= 0 ? next[matchIndex].id : crypto.randomUUID(),
-        });
-
-        if (matchIndex >= 0) {
-          next[matchIndex] = normalized;
-        } else {
-          additions.push(normalized);
-        }
-      });
-
-      return [...additions, ...next];
-    });
-
-    setImportMessage(
-      `${importPreview.items.length} baris berhasil diimpor dengan total modal ${formatRupiah(
-        importPreview.items.reduce(
-          (sum, item) => sum + item.buyPrice * item.quantity,
-          0,
-        ),
-      )}. ${
-        replaceMatchingImports
-          ? "Kepemilikan yang cocok sudah diperbarui."
-          : "Baris ditambahkan sebagai kepemilikan baru."
-      }`,
-    );
-  }
-
-  async function handleImportFileChange(
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    setImportFileMessage("");
-    setImportFileError("");
-    setImportMessage("");
-
-    if (!file) return;
-
-    setIsReadingImportFile(true);
-
-    try {
-      const extractedText = await readPortfolioImportFile(file);
-      if (!extractedText.trim()) {
-        throw new Error("File tidak berisi baris yang bisa dibaca.");
-      }
-
-      setImportText(extractedText);
-      setImportFileMessage(
-        `${file.name} berhasil dibaca. Periksa pratinjau sebelum mengimpor.`,
-      );
-    } catch (error) {
-      setImportFileError(
-        error instanceof Error
-          ? error.message
-          : "File gagal dibaca. Coba simpan sebagai .xlsx atau .csv.",
-      );
-    } finally {
-      setIsReadingImportFile(false);
-    }
-  }
-
   return (
     <div className="space-y-5">
-      <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-stone-950">Mode penyimpanan</p>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Mode lokal menyimpan data hanya di browser ini. Cloud sync menyimpan data ke akun Supabase agar bisa dipakai di perangkat lain.
-            </p>
+      <section className="rounded-[1.6rem] border border-stone-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-stone-950">Portofolio</p>
+            <p className="mt-1 truncate text-sm text-stone-500">{syncMessage}</p>
           </div>
           <span
             className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
@@ -516,180 +401,23 @@ export function PortfolioTable() {
             {user ? "Cloud sync enabled" : isConfigured ? "Local mode" : "Local mode"}
           </span>
         </div>
-        <p className="mt-3 text-sm font-medium text-stone-600">{syncMessage}</p>
       </section>
 
-      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-stone-950">
-              Impor semi-otomatis
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Tempel CSV atau baris tabel dari Bibit, spreadsheet, atau catatan
-              tabungan. Header seperti nama, jenis, ticker, harga beli, unit,
-              NAV, saldo, sumber, dan catatan akan dideteksi otomatis.
-            </p>
-          </div>
-          <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-            Siap untuk Bibit/tabungan
-          </span>
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
-          <div className="grid gap-3">
-            <div className="rounded-lg border border-dashed border-stone-300 bg-white/60 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-stone-950">
-                    Upload file Excel
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-stone-500">
-                    Mendukung .xlsx, .csv, .tsv, dan .txt dari sheet pertama.
-                  </p>
-                </div>
-                <label className="w-fit cursor-pointer rounded-lg bg-stone-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800">
-                  {isReadingImportFile ? "Membaca..." : "Pilih file"}
-                  <input
-                    type="file"
-                    className="sr-only"
-                    accept=".xlsx,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values,text/plain"
-                    onChange={handleImportFileChange}
-                    disabled={isReadingImportFile}
-                  />
-                </label>
-              </div>
-              {importFileMessage ? (
-                <p className="mt-3 text-sm font-medium text-emerald-700">
-                  {importFileMessage}
-                </p>
-              ) : null}
-              {importFileError ? (
-                <p className="mt-3 text-sm font-medium text-rose-700">
-                  {importFileError}
-                </p>
-              ) : null}
-            </div>
-            <textarea
-              className="input min-h-44 font-mono text-sm"
-              value={importText}
-              onChange={(event) => {
-                setImportText(event.target.value);
-                setImportMessage("");
-              }}
-              placeholder={portfolioImportExample}
-            />
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
-                <input
-                  type="checkbox"
-                  checked={replaceMatchingImports}
-                  onChange={(event) =>
-                    setReplaceMatchingImports(event.target.checked)
-                  }
-                />
-                Perbarui kepemilikan yang cocok berdasarkan ticker atau nama
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={importParsedRows}
-                  disabled={importPreview.items.length === 0}
-                  className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Impor baris pratinjau
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportText("");
-                    setImportMessage("");
-                  }}
-                  className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
-                >
-                  Bersihkan
-                </button>
-              </div>
-            </div>
-            {importMessage ? (
-              <div className="rounded-lg bg-emerald-50 p-3 text-sm font-medium text-emerald-800 ring-1 ring-emerald-100">
-                {importMessage}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="rounded-lg bg-stone-100 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-semibold text-stone-950">Pratinjau</h3>
-              <span className="text-xs font-semibold text-stone-500">
-                {importPreview.items.length} valid / {importPreview.rowCount}{" "}
-                baris
-              </span>
-            </div>
-            {importPreview.items.length > 0 ? (
-              <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-stone-200 bg-white">
-                <table className="w-full min-w-[520px] text-left text-xs">
-                  <thead className="bg-stone-50 uppercase tracking-wide text-stone-500">
-                    <tr>
-                      <th className="px-3 py-2">Nama</th>
-                      <th className="px-3 py-2">Jenis</th>
-                      <th className="px-3 py-2">Unit</th>
-                      <th className="px-3 py-2">Harga/unit</th>
-                      <th className="px-3 py-2">Modal</th>
-                      <th className="px-3 py-2">Sumber</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100">
-                    {importPreview.items.slice(0, 8).map((item, index) => (
-                      <tr key={`${item.name}-${index}`}>
-                        <td className="px-3 py-2 font-medium text-stone-950">
-                          {item.name}
-                        </td>
-                        <td className="px-3 py-2">
-                          <InstrumentBadge
-                            type={item.type}
-                            className="text-[10px]"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          {item.quantity.toLocaleString("id-ID")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {formatRupiah(item.currentPrice)}
-                        </td>
-                        <td className="px-3 py-2 font-semibold text-stone-950">
-                          {formatRupiah(item.buyPrice * item.quantity)}
-                        </td>
-                        <td className="px-3 py-2">
-                          {dataSourceLabel(item.dataSource)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="mt-3 text-sm leading-6 text-stone-600">
-                Tempel baris untuk melihat data yang akan disimpan. Untuk
-                tabungan, kolom saldo akan menjadi satu kepemilikan kas.
-              </p>
-            )}
-            {importPreview.errors.length > 0 ? (
-              <div className="mt-3 rounded-lg bg-rose-50 p-3 text-xs font-medium leading-5 text-rose-800 ring-1 ring-rose-100">
-                {importPreview.errors.slice(0, 4).map((error) => (
-                  <p key={error}>{error}</p>
-                ))}
-              </div>
-            ) : null}
-            {importPreview.warnings.length > 0 ? (
-              <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-medium leading-5 text-amber-800 ring-1 ring-amber-100">
-                {importPreview.warnings.slice(0, 3).map((warning) => (
-                  <p key={warning}>{warning}</p>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </section>
+      <CsvPortfolioImportSection
+        existingItems={items}
+        hasStoredPortfolio={hasStoredPortfolio}
+        onImport={async (nextItems) => {
+          localArahDanaStorage.writePortfolio(nextItems);
+          if (user) {
+            await saveCloudPortfolio(user, nextItems);
+          }
+          setHasStoredPortfolio(true);
+          setItems(nextItems);
+        }}
+        storageLabel={user ? "Supabase dan localStorage" : "localStorage"}
+        title="CSV Import"
+        description="Upload CSV lokal atau tempel data reksadana/Bibit. File dibaca di browser saja."
+      />
 
       <form
         onSubmit={submitItem}
@@ -697,10 +425,10 @@ export function PortfolioTable() {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-stone-950">
-            {editingId ? "Edit kepemilikan" : "Input manual cadangan"}
+            {editingId ? "Edit holding" : "Tambah holding"}
           </h2>
           <span className="w-fit rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
-            Data contoh diberi label jelas
+            Manual
           </span>
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -876,8 +604,7 @@ export function PortfolioTable() {
           <div>
             <h2 className="font-semibold text-stone-950">Kepemilikan</h2>
             <p className="mt-1 text-sm text-stone-500">
-              Pembaruan memakai /api/market (source=auto) dan tetap menyimpan
-              harga sebelumnya saat ticker gagal.
+              Holding tersimpan, harga, dan P/L.
             </p>
           </div>
           <button
@@ -1102,39 +829,6 @@ function PerformerSummary({
   );
 }
 
-async function readPortfolioImportFile(file: File) {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-
-  if (extension === "csv" || extension === "tsv" || extension === "txt") {
-    return file.text();
-  }
-
-  if (extension === "xlsx") {
-    const { readSheet } = await import("read-excel-file/browser");
-    const rows = await readSheet(file);
-    return rows
-      .map((row) => row.map(formatImportCell).join(","))
-      .filter((line) => line.trim())
-      .join("\n");
-  }
-
-  throw new Error("Format file belum didukung. Gunakan .xlsx atau .csv.");
-}
-
-function formatImportCell(value: CellValue | null) {
-  if (value === null) return "";
-
-  const text =
-    value instanceof Date
-      ? value.toISOString().slice(0, 10)
-      : typeof value === "boolean"
-        ? value ? "true" : "false"
-        : String(value);
-
-  if (!/[",\n\r]/.test(text)) return text;
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
 function getWritablePortfolioBase(
   current: PortfolioItem[],
   hasStoredPortfolio: boolean,
@@ -1194,24 +888,6 @@ function normalizePortfolioItems(items: PortfolioItem[]) {
     seenIds.add(id);
     return { ...normalized, id };
   });
-}
-
-function isSameHolding(a: PortfolioItem, b: Omit<PortfolioItem, "id">) {
-  const tickerA = a.ticker?.trim().toUpperCase();
-  const tickerB = b.ticker?.trim().toUpperCase();
-
-  if (tickerA && tickerB) {
-    return tickerA === tickerB;
-  }
-
-  return (
-    normalizeMatchText(a.name) === normalizeMatchText(b.name) &&
-    a.type === b.type
-  );
-}
-
-function normalizeMatchText(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function isRiskCategory(value: string): value is RiskCategory {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { InvestmentType, TimeHorizon, UserSettings } from "@/lib/types/investment";
 import { AccountPanel } from "@/components/AccountPanel";
@@ -18,6 +19,7 @@ import { loadCloudSettings, saveCloudSettings, syncLocalDataToCloud } from "@/li
 import { clampNumber, formatRupiah, investmentTypeLabel, nonNegativeNumber } from "@/lib/utils/format";
 
 const defaults = DEFAULT_USER_SETTINGS;
+const THEME_KEY = "arahdana.theme";
 
 export default function SettingsPage() {
   const { isLoading: isAuthLoading, user } = useAuth();
@@ -29,11 +31,21 @@ export default function SettingsPage() {
     message: string;
   } | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.localStorage.getItem(THEME_KEY) === "dark",
+  );
   const [cloudSyncStatus, setCloudSyncStatus] = useState<{
     tone: "success" | "error" | "info";
     message: string;
   } | null>(null);
   const suppressNextSettingsWrite = useRef(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = isDarkMode ? "dark" : "light";
+    window.localStorage.setItem(THEME_KEY, isDarkMode ? "dark" : "light");
+  }, [isDarkMode]);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -223,14 +235,39 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="grid max-w-4xl gap-5">
+    <div className="mx-auto grid max-w-4xl gap-5">
+      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
+        <p className="text-sm font-medium text-white/62">Profil ArahDana</p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+          {user?.email ?? "Mode lokal"}
+        </h2>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <ProfilePill label="Sync" value={user ? "Cloud" : "Local"} />
+          <ProfilePill label="Tema" value={isDarkMode ? "Dark" : "Light"} />
+          <ProfilePill label="Versi" value={APP_VERSION_LABEL.replace("ArahDana ", "")} />
+        </div>
+      </section>
+
       <AccountPanel />
 
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Asumsi bawaan</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
-          Mode lokal menyimpan data hanya di browser ini. Cloud sync menyimpan data ke akun Supabase agar bisa dipakai di perangkat lain.
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Preferensi</h2>
+            <p className="mt-1 text-sm text-stone-500">Profil risiko dan tampilan.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsDarkMode((current) => !current)}
+            className={`min-h-11 rounded-full px-4 text-sm font-semibold ${
+              isDarkMode
+                ? "bg-stone-950 text-white"
+                : "bg-stone-100 text-stone-700"
+            }`}
+          >
+            {isDarkMode ? "Dark on" : "Dark off"}
+          </button>
+        </div>
         {cloudSyncStatus ? (
           <p
             className={`mt-3 whitespace-pre-line text-sm font-medium ${
@@ -378,6 +415,14 @@ export default function SettingsPage() {
         </div>
         {clearStatus ? <p className="mt-3 text-sm font-medium text-emerald-700">{clearStatus}</p> : null}
       </section>
+
+      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-stone-950">App info</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <SettingsLink href="/market-prices" title="Harga pasar" />
+          <SettingsLink href="/integrations" title="Integrasi" />
+        </div>
+      </section>
       <p className="px-2 text-xs font-medium text-stone-400">{APP_VERSION_LABEL}</p>
     </div>
   );
@@ -389,6 +434,29 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {label}
       {children}
     </label>
+  );
+}
+
+function ProfilePill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.2rem] bg-white/8 p-4 ring-1 ring-white/10">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/48">
+        {label}
+      </p>
+      <p className="mt-1 font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function SettingsLink({ href, title }: { href: string; title: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex min-h-14 items-center justify-between rounded-[1.2rem] bg-stone-100 px-4 text-sm font-semibold text-stone-950"
+    >
+      {title}
+      <span className="text-emerald-700" aria-hidden="true">&gt;</span>
+    </Link>
   );
 }
 

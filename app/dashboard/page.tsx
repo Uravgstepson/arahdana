@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AllocationChart } from "@/components/AllocationChart";
-import { PortfolioPerformanceChart } from "@/components/PortfolioPerformanceChart";
-import { StatCard } from "@/components/StatCard";
 import { useAuth } from "@/components/AuthProvider";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
-import type { InvestmentType, PortfolioItem, RiskCategory, WatchlistItem } from "@/lib/types/investment";
+import type { InvestmentType, PortfolioItem, RiskCategory, SavedAnalysisResult, WatchlistItem } from "@/lib/types/investment";
 import { dataSourceLabel } from "@/lib/providers/marketClient";
 import { formatPercent, formatRupiah, investmentTypeLabel, nonNegativeNumber } from "@/lib/utils/format";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
@@ -20,10 +18,10 @@ type Performer = {
 };
 
 export default function DashboardPage() {
-  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
+  const { isLoading: isAuthLoading, user } = useAuth();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
-  const [watchlistIsCloud, setWatchlistIsCloud] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState<SavedAnalysisResult[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
 
@@ -36,14 +34,16 @@ export default function DashboardPage() {
         const storedPortfolio = localArahDanaStorage.readPortfolio();
         const storedWatchlist = localArahDanaStorage.readWatchlist();
         const storedSettings = localArahDanaStorage.readSettings();
+        const storedAnalysisResults = localArahDanaStorage.readAnalysisResults();
         const localPortfolio = Array.isArray(storedPortfolio) ? storedPortfolio.map(normalizePortfolioItem) : [];
         const localWatchlist = Array.isArray(storedWatchlist) ? storedWatchlist : [];
+        const localAnalysisResults = Array.isArray(storedAnalysisResults) ? storedAnalysisResults : [];
 
         if (!user) {
           if (!isMounted) return;
           setPortfolio(localPortfolio);
           setWatchlist(localWatchlist);
-          setWatchlistIsCloud(false);
+          setAnalysisResults(localAnalysisResults);
           if (storedSettings && typeof storedSettings.aprMoneyMarketFund === "number" && Number.isFinite(storedSettings.aprMoneyMarketFund)) {
             setAprMoneyMarketFund(nonNegativeNumber(storedSettings.aprMoneyMarketFund));
           }
@@ -62,7 +62,7 @@ export default function DashboardPage() {
           const nextWatchlist = cloudWatchlist.length > 0 ? cloudWatchlist : localWatchlist;
           setPortfolio(nextPortfolio);
           setWatchlist(nextWatchlist);
-          setWatchlistIsCloud(cloudWatchlist.length > 0);
+          setAnalysisResults(localAnalysisResults);
           localArahDanaStorage.writePortfolio(nextPortfolio);
           localArahDanaStorage.writeWatchlist(nextWatchlist);
           if (cloudSettings) {
@@ -75,7 +75,7 @@ export default function DashboardPage() {
           if (!isMounted) return;
           setPortfolio(localPortfolio);
           setWatchlist(localWatchlist);
-          setWatchlistIsCloud(false);
+          setAnalysisResults(localAnalysisResults);
           if (storedSettings && typeof storedSettings.aprMoneyMarketFund === "number" && Number.isFinite(storedSettings.aprMoneyMarketFund)) {
             setAprMoneyMarketFund(nonNegativeNumber(storedSettings.aprMoneyMarketFund));
           }
@@ -91,53 +91,55 @@ export default function DashboardPage() {
 
   const metrics = useMemo(() => calculateDashboardMetrics(portfolio, aprMoneyMarketFund), [aprMoneyMarketFund, portfolio]);
   const hasPortfolio = portfolio.length > 0;
-  const dataSource = !isHydrated
-    ? "Memuat portofolio lokal"
-      : !hasPortfolio
-      ? user ? "Belum ada portofolio cloud/lokal" : "Belum ada portofolio lokal"
-      : portfolio.some((item) => item.dataSource === "live_public_market_data")
-      ? "Data pasar publik langsung + portofolio lokal"
-      : portfolio.some((item) => item.dataSource === "bibit_import" || item.dataSource === "savings_import" || item.dataSource === "semi_auto_import")
-        ? "Impor semi-otomatis + portofolio lokal"
-      : "Input manual dari localStorage";
+  const syncLabel = user ? "Cloud sync" : "Local";
+  const latestRecommendations = analysisResults.slice(0, 3);
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-stone-950">Dasbor portofolio</h2>
-          <p className="mt-1 text-sm text-stone-600">
-            Sumber data: <span className="font-semibold">{dataSource}</span>
+      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-emerald-100 ring-1 ring-white/15">
+            {syncLabel}
+          </span>
+          <Link className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-stone-950" href="/portfolio">
+            Kelola
+          </Link>
+        </div>
+        <div className="mt-8">
+          <p className="text-sm font-medium text-white/62">Total nilai</p>
+          <p className="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">
+            {formatRupiah(metrics.current)}
           </p>
         </div>
-        <Link className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm" href="/portfolio">
-          Kelola portofolio
-        </Link>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total modal" value={formatRupiah(metrics.invested)} helper={hasPortfolio ? "Portofolio lokal tersimpan" : "Belum ada kepemilikan"} />
-        <StatCard label="Nilai kini" value={formatRupiah(metrics.current)} helper={dataSource} />
-        <StatCard label="Total untung/rugi" value={formatRupiah(metrics.profit)} helper={formatPercent(metrics.profitPercent)} tone={metrics.profit >= 0 ? "good" : "bad"} />
-        <StatCard label="Eksposur risiko" value={metrics.riskSummary.label} helper={metrics.riskSummary.detail} />
-      </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <DashboardMetric label="Hari ini" value="-" helper="Belum tersedia" />
+          <DashboardMetric
+            label="Total P/L"
+            value={formatRupiah(metrics.profit)}
+            helper={formatPercent(metrics.profitPercent)}
+            tone={metrics.profit >= 0 ? "good" : "bad"}
+          />
+          <DashboardMetric
+            label="Risiko"
+            value={metrics.riskSummary.label}
+            helper={metrics.riskSummary.shortDetail}
+          />
+        </div>
+      </section>
 
       {!hasPortfolio && isHydrated ? (
-        <section className="rounded-lg border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
+        <section className="rounded-[1.6rem] border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
           <h2 className="text-lg font-semibold text-stone-950">Portofolio masih kosong</h2>
-          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-            Tambahkan kepemilikan manual atau impor dari file agar dasbor menampilkan alokasi, nilai kini, P/L, dan risiko dari data lokal Anda sendiri.
-          </p>
           <Link className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm" href="/portfolio">
             Tambah portofolio
           </Link>
         </section>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-5 xl:grid-cols-[1fr_0.95fr]">
         <AllocationChart
-          title="Alokasi berdasarkan jenis instrumen"
-          description="Dihitung dari harga terbaru/kini yang tersimpan di localStorage."
+          title="Alokasi"
+          compact
           data={metrics.allocation.map((item) => ({
             key: item.type,
             label: investmentTypeLabel(item.type),
@@ -147,55 +149,108 @@ export default function DashboardPage() {
           emptyMessage="Belum ada alokasi. Tambahkan kepemilikan manual dulu."
         />
 
-        <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">Ringkasan performa</h2>
-          <div className="mt-4 grid gap-3">
+        <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Performa</h2>
+            <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
+              {portfolio.length} holding
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <PerformerCard title="Kenaikan terbaik" performer={metrics.topGainer} tone="good" />
             <PerformerCard title="Performa terlemah" performer={metrics.worstPerformer} tone="bad" />
           </div>
         </section>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <PortfolioPerformanceChart items={portfolio} aprMoneyMarketFund={aprMoneyMarketFund} />
-        <AllocationChart
-          title="Eksposur risiko"
-          description="Komposisi risiko berdasarkan nilai kini portofolio lokal."
-          data={metrics.riskExposure.map((item) => ({
-            key: item.risk,
-            label: riskLabel(item.risk),
-            value: item.value,
-            percent: item.percent,
-          }))}
-          emptyMessage="Belum ada data risiko untuk dihitung."
-        />
-      </div>
-
-      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Pratinjau pantauan</h2>
-            <p className="mt-1 text-sm text-stone-500">
-              {user && watchlistIsCloud ? "Cloud sync enabled" : isConfigured ? "Local mode" : "Local mode"}
-            </p>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold">Pantauan</h2>
+            <Link className="text-sm font-semibold text-emerald-700" href="/watchlist">Kelola</Link>
           </div>
-          <Link className="text-sm font-semibold text-emerald-700" href="/watchlist">Kelola pantauan</Link>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {watchlist.slice(0, 3).map((item) => (
-            <div key={item.id} className="rounded-lg bg-stone-100 p-4">
-              <p className="font-semibold">{item.name}</p>
-              <p className="mt-1 text-sm text-stone-600">{item.targetBuyZone}</p>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">{watchlistStatusLabel(item.status)}</p>
-            </div>
-          ))}
-          {watchlist.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 md:col-span-3">
-              Belum ada pantauan. Tambahkan ticker atau zona target di halaman Pantauan.
-            </div>
-          ) : null}
-        </div>
-      </section>
+          <div className="mt-4 grid gap-3">
+            {watchlist.slice(0, 3).map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 rounded-[1.2rem] bg-stone-100 p-4">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{item.name}</p>
+                  <p className="mt-1 truncate text-sm text-stone-600">{item.targetBuyZone}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-stone-200">
+                  {watchlistStatusLabel(item.status)}
+                </span>
+              </div>
+            ))}
+            {watchlist.length === 0 ? (
+              <EmptyMini href="/watchlist" label="Tambah pantauan" />
+            ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold">Rekomendasi</h2>
+            <Link className="text-sm font-semibold text-emerald-700" href="/analyzer">Analisis</Link>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {latestRecommendations.map((item) => (
+              <div key={item.id} className="rounded-[1.2rem] bg-stone-100 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate font-semibold">{item.name}</p>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${verdictChipClass(item.result.verdict)}`}>
+                    {verdictLabel(item.result.verdict)}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-stone-600">
+                  Alokasi {item.result.allocationPercentage}% | Confidence {item.result.confidence}%
+                </p>
+              </div>
+            ))}
+            {latestRecommendations.length === 0 ? (
+              <EmptyMini href="/analyzer" label="Buat analisis" />
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function DashboardMetric({
+  label,
+  value,
+  helper,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  tone?: "neutral" | "good" | "bad";
+}) {
+  const valueClass =
+    tone === "good"
+      ? "text-emerald-200"
+      : tone === "bad"
+        ? "text-rose-200"
+        : "text-white";
+
+  return (
+    <div className="rounded-[1.25rem] bg-white/8 p-4 ring-1 ring-white/10">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/52">
+        {label}
+      </p>
+      <p className={`mt-2 text-lg font-semibold ${valueClass}`}>{value}</p>
+      <p className="mt-1 text-xs font-medium text-white/50">{helper}</p>
+    </div>
+  );
+}
+
+function EmptyMini({ href, label }: { href: string; label: string }) {
+  return (
+    <div className="rounded-[1.2rem] border border-dashed border-stone-300 p-5 text-center">
+      <Link href={href} className="text-sm font-semibold text-emerald-700">
+        {label}
+      </Link>
     </div>
   );
 }
@@ -204,21 +259,33 @@ function PerformerCard({ title, performer, tone }: { title: string; performer: P
   const toneClass = tone === "good" ? "text-emerald-700" : "text-rose-700";
 
   return (
-    <div className="rounded-lg bg-stone-100 p-4">
-      <p className="text-sm font-semibold text-stone-500">{title}</p>
+    <div className="rounded-[1.2rem] bg-stone-100 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{title}</p>
       {performer ? (
         <>
-          <p className="mt-2 font-semibold text-stone-950">{performer.item.name}</p>
+          <p className="mt-2 truncate font-semibold text-stone-950">{performer.item.name}</p>
           <p className={`mt-1 text-sm font-semibold ${toneClass}`}>
             {formatRupiah(performer.profit)} ({formatPercent(performer.profitPercent)})
           </p>
           <p className="mt-1 text-xs text-stone-500">{dataSourceLabel(performer.item.dataSource)}</p>
         </>
       ) : (
-        <p className="mt-2 text-sm text-stone-500">Belum ada data kepemilikan.</p>
+        <p className="mt-2 text-sm text-stone-500">Belum ada data.</p>
       )}
     </div>
   );
+}
+
+function verdictChipClass(verdict: SavedAnalysisResult["result"]["verdict"]) {
+  if (verdict === "BUY") return "bg-emerald-100 text-emerald-800";
+  if (verdict === "WAIT") return "bg-amber-100 text-amber-900";
+  return "bg-rose-100 text-rose-800";
+}
+
+function verdictLabel(verdict: SavedAnalysisResult["result"]["verdict"]) {
+  if (verdict === "BUY") return "BUY";
+  if (verdict === "WAIT") return "WAIT";
+  return "AVOID";
 }
 
 function calculateDashboardMetrics(items: PortfolioItem[], aprMoneyMarketFund: number) {
@@ -236,19 +303,6 @@ function calculateDashboardMetrics(items: PortfolioItem[], aprMoneyMarketFund: n
   }, {});
   const allocation = Object.entries(allocationMap).map(([type, value]) => ({
     type: type as InvestmentType,
-    value,
-    percent: current > 0 ? Math.round((value / current) * 100) : 0,
-  }));
-  const riskExposureMap = items.reduce<Record<RiskCategory, number>>(
-    (acc, item) => {
-      const { currentPriceUsed } = computePortfolioCurrentPrice(item, { aprMoneyMarketFund });
-      acc[item.riskCategory] += currentPriceUsed * item.quantity;
-      return acc;
-    },
-    { low: 0, medium: 0, high: 0 },
-  );
-  const riskExposure = Object.entries(riskExposureMap).map(([risk, value]) => ({
-    risk: risk as RiskCategory,
     value,
     percent: current > 0 ? Math.round((value / current) * 100) : 0,
   }));
@@ -271,7 +325,6 @@ function calculateDashboardMetrics(items: PortfolioItem[], aprMoneyMarketFund: n
     profit,
     profitPercent,
     allocation,
-    riskExposure,
     topGainer: performers.length ? performers.reduce((best, item) => (item.profitPercent > best.profitPercent ? item : best)) : null,
     worstPerformer: performers.length ? performers.reduce((worst, item) => (item.profitPercent < worst.profitPercent ? item : worst)) : null,
     riskSummary,
@@ -279,7 +332,13 @@ function calculateDashboardMetrics(items: PortfolioItem[], aprMoneyMarketFund: n
 }
 
 function summarizeRisk(items: PortfolioItem[], aprMoneyMarketFund: number) {
-  if (items.length === 0) return { label: "Belum ada data", detail: "Tambahkan kepemilikan dulu" };
+  if (items.length === 0) {
+    return {
+      label: "Belum ada data",
+      detail: "Tambahkan kepemilikan dulu",
+      shortDetail: "Kosong",
+    };
+  }
 
   const exposure = items.reduce<Record<RiskCategory, number>>(
     (acc, item) => {
@@ -299,6 +358,12 @@ function summarizeRisk(items: PortfolioItem[], aprMoneyMarketFund: number) {
   return {
     label: dominant[0] === "high" ? "Risiko tinggi" : dominant[0] === "medium" ? "Seimbang" : "Defensif",
     detail,
+    shortDetail:
+      dominant[0] === "high"
+        ? `${Math.round((exposure.high / total) * 100)}% tinggi`
+        : dominant[0] === "medium"
+          ? `${Math.round((exposure.medium / total) * 100)}% sedang`
+          : `${Math.round((exposure.low / total) * 100)}% rendah`,
   };
 }
 
@@ -307,12 +372,6 @@ function watchlistStatusLabel(status: WatchlistItem["status"]) {
   if (status === "waiting") return "Menunggu";
   if (status === "avoid") return "Hindari";
   return "Sudah dibeli";
-}
-
-function riskLabel(risk: RiskCategory) {
-  if (risk === "high") return "Risiko tinggi";
-  if (risk === "medium") return "Risiko sedang";
-  return "Risiko rendah";
 }
 
 function normalizePortfolioItem(item: PortfolioItem): PortfolioItem {

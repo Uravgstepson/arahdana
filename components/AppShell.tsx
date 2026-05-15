@@ -1,12 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Disclaimer } from "@/components/Disclaimer";
-import { AuthButton } from "@/components/AuthButton";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
-import { cn } from "@/lib/utils/format";
 
 const titles: Record<string, string> = {
   "/dashboard": "Dasbor",
@@ -23,45 +20,26 @@ const titles: Record<string, string> = {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const title = titles[pathname] ?? "ArahDana";
-  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   return (
     <div className="min-h-screen text-stone-950">
       <Sidebar />
-      <main className="mx-auto min-h-screen w-full max-w-7xl px-4 pb-44 pt-4 sm:px-5 lg:pb-8 lg:pl-72 lg:pr-6 lg:pt-6">
-        <div className="motion-shell relative z-[80] mb-5 flex overflow-visible flex-col gap-3 rounded-[1.7rem] border border-white/40 bg-white/50 p-4 shadow-sm backdrop-blur-2xl sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <main className="mx-auto min-h-screen w-full max-w-7xl px-4 pb-28 pt-4 sm:px-5 lg:pb-8 lg:pl-32 lg:pr-6 lg:pt-6">
+        <header className="motion-shell sticky top-3 z-40 mb-5 flex items-center justify-between rounded-[1.5rem] border border-white/50 bg-white/66 px-4 py-3 shadow-sm backdrop-blur-3xl sm:static sm:rounded-[1.7rem] sm:px-5 sm:py-4">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-emerald-700">ArahDana</p>
-            <h1
-              className={cn(
-                "text-2xl font-semibold leading-tight tracking-tight text-stone-950 transition-all duration-200 sm:text-[2rem]",
-                !isHeaderExpanded && "sm:max-w-xs sm:truncate",
-              )}
-            >
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+              ArahDana
+            </p>
+            <h1 className="truncate text-xl font-semibold leading-tight text-stone-950 sm:text-2xl">
               {title}
             </h1>
-            {isHeaderExpanded ? (
-              <p className="mt-3 text-sm text-stone-600">
-                Dasbor pendukung keputusan investasi Indonesia
-              </p>
-            ) : null}
           </div>
-          <div className="relative z-[90] flex flex-wrap items-center gap-2">
-            <AuthButton />
-            <button
-              type="button"
-              onClick={() => setIsHeaderExpanded((current) => !current)}
-              className="w-fit rounded-full bg-white/70 px-3 py-1.5 text-xs font-semibold text-stone-600 ring-1 ring-white/70 hover:bg-white/90"
-              aria-expanded={isHeaderExpanded}
-            >
-              {isHeaderExpanded ? "Tutup" : "Buka"}
-            </button>
-          </div>
-        </div>
-        <div className="motion-shell motion-delay-1 relative z-10">
-          <Disclaimer />
-        </div>
-        <div key={pathname} className="page-flow relative z-0 mt-5">
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+            Capsule
+          </span>
+        </header>
+        <Disclaimer />
+        <div key={pathname} className="page-flow relative z-0">
           {children}
         </div>
         <footer className="mt-8 text-center text-[0.68rem] font-medium tracking-[0.08em] text-stone-400 lg:hidden">

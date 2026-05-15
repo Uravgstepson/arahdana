@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type {
+  AnalysisInput,
   AnalysisResult,
   InvestmentType,
   PricePoint,
@@ -97,8 +98,8 @@ export function AnalyzerForm() {
     };
   }, [apiPrices, manualParsedPrices, marketMeta]);
 
-  const result: AnalysisResult = useMemo(() => {
-    return analyzeInvestment({
+  const analysisInput: AnalysisInput = useMemo(
+    () => ({
       name,
       type,
       ticker,
@@ -106,16 +107,21 @@ export function AnalyzerForm() {
       riskTolerance: clampNumber(riskTolerance, 5, 30),
       timeHorizon,
       prices: priceSource.prices,
-    });
-  }, [
-    capital,
-    name,
-    priceSource.prices,
-    riskTolerance,
-    ticker,
-    timeHorizon,
-    type,
-  ]);
+    }),
+    [
+      capital,
+      name,
+      priceSource.prices,
+      riskTolerance,
+      ticker,
+      timeHorizon,
+      type,
+    ],
+  );
+
+  const result: AnalysisResult = useMemo(() => {
+    return analyzeInvestment(analysisInput);
+  }, [analysisInput]);
 
   const latestClose = priceSource.prices.at(-1);
 
@@ -215,11 +221,11 @@ export function AnalyzerForm() {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
-      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+      <section className="rounded-[1.7rem] border border-stone-200 bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-stone-950">
-            Analisis investasi
+            Analisis cepat
           </h2>
           <span
             className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
@@ -231,14 +237,9 @@ export function AnalyzerForm() {
             {priceSource.badge}
           </span>
         </div>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
-          Ambil harga pasar dari Google Finance untuk ticker IDX, atau gunakan
-          harga manual dan data contoh yang disediakan label jelas. Format
-          manual: <span className="font-mono">2026-01-01,1050</span> atau cukup{" "}
-          <span className="font-mono">1050</span>.
-        </p>
 
         <form onSubmit={fetchAndAnalyze} className="mt-4 grid gap-4">
+          <StepLabel value="1" label="Instrumen" />
           <Field label="Nama instrumen">
             <input
               className="input"
@@ -286,6 +287,7 @@ export function AnalyzerForm() {
             </div>
           </Field>
 
+          <StepLabel value="2" label="Data harga" />
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Rentang">
               <select
@@ -323,6 +325,7 @@ export function AnalyzerForm() {
             </Field>
           </div>
 
+          <StepLabel value="3" label="Profil" />
           <Field label="Modal">
             <input
               className="input"
@@ -417,6 +420,7 @@ export function AnalyzerForm() {
       ) : (
         <div className="space-y-5">
           <AnalyzerResult
+            input={analysisInput}
             result={result}
             prices={priceSource.prices}
             dataSourceLabel={priceSource.label}
@@ -484,6 +488,19 @@ function Field({
       {label}
       {children}
     </label>
+  );
+}
+
+function StepLabel({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-50 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">
+        {value}
+      </span>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+        {label}
+      </p>
+    </div>
   );
 }
 

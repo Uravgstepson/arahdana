@@ -126,13 +126,10 @@ export function AccountPanel() {
   }
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">Akun & cloud sync</h2>
-          <p className="mt-2 text-sm leading-6 text-stone-600">
-            Mode lokal menyimpan data hanya di browser ini. Cloud sync menyimpan data ke akun Supabase agar bisa dipakai di perangkat lain.
-          </p>
         </div>
         <span
           className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
@@ -146,10 +143,7 @@ export function AccountPanel() {
       </div>
 
       {!user ? (
-        <div className="mt-5 rounded-lg bg-stone-100 p-4">
-          <p className="text-sm leading-6 text-stone-600">
-            Login dengan email dan password untuk mengaktifkan sinkronisasi cloud.
-          </p>
+        <div className="mt-5 rounded-[1.25rem] bg-stone-100 p-4">
           <Link
             href="/login"
             className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
@@ -159,7 +153,7 @@ export function AccountPanel() {
         </div>
       ) : (
         <div className="mt-5 grid gap-4">
-          <div className="rounded-lg bg-stone-100 p-4">
+          <div className="rounded-[1.25rem] bg-stone-100 p-4">
             <p className="text-sm font-semibold text-stone-950">Profil pengguna</p>
             <p className="mt-1 text-sm text-stone-600">{profile?.email ?? user.email}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
@@ -183,11 +177,8 @@ export function AccountPanel() {
             </div>
           </div>
 
-          <div className="rounded-lg bg-stone-100 p-4">
+          <div className="rounded-[1.25rem] bg-stone-100 p-4">
             <p className="text-sm font-semibold text-stone-950">Sync antar perangkat</p>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Sinkronisasi hanya menyimpan data aplikasi ArahDana. Aplikasi tidak meminta atau menyimpan kredensial bank, e-wallet, atau Bibit.
-            </p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
