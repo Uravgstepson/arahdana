@@ -1,12 +1,16 @@
-import type { AnalysisResult } from "@/lib/types/investment";
+import { PriceChart } from "@/components/PriceChart";
+import { ScoreBreakdownChart } from "@/components/ScoreBreakdownChart";
+import type { AnalysisResult, PricePoint } from "@/lib/types/investment";
 import { formatPercent, formatRupiah } from "@/lib/utils/format";
 
 export function AnalyzerResult({
   result,
+  prices,
   dataSourceLabel = "Data contoh",
   isMockData = true,
 }: {
   result: AnalysisResult;
+  prices: PricePoint[];
   dataSourceLabel?: string;
   isMockData?: boolean;
 }) {
@@ -17,9 +21,15 @@ export function AnalyzerResult({
         ? "bg-amber-500 text-stone-950"
         : "bg-rose-700 text-white";
   const mainRiskWarning = result.doNotBuyWarnings[0] ?? "Tidak ada peringatan besar dari data historis.";
+  const latestClose = result.trend.latestPrice;
+  const hasSma20 = result.trend.dataPoints >= 20 && result.trend.sma20 > 0;
+  const hasSma50 = result.trend.dataPoints >= 50 && result.trend.sma50 > 0;
+  const trendExplanation = buildTrendExplanation(result);
 
   return (
     <section className="space-y-5">
+      <PriceChart prices={prices} isMockData={isMockData} sourceLabel={dataSourceLabel} />
+
       <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -40,7 +50,7 @@ export function AnalyzerResult({
         <div className="mt-5 grid gap-4 lg:grid-cols-[220px_1fr]">
           <div className="rounded-lg bg-stone-100 p-4">
             <p className="text-sm font-medium text-stone-500">Keputusan</p>
-            <div className={`mt-2 w-fit rounded-lg px-4 py-2 text-2xl font-bold ${verdictStyle}`}>
+            <div className={`mt-2 w-fit rounded-lg px-4 py-2 text-2xl font-bold shadow-sm ${verdictStyle}`}>
               {verdictLabel(result.verdict)}
             </div>
           </div>
@@ -55,6 +65,22 @@ export function AnalyzerResult({
           <p className="font-semibold">Peringatan risiko utama</p>
           <p className="mt-1">{mainRiskWarning}</p>
         </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-stone-950">Sinyal tren</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <Metric label="Close terbaru" value={formatRupiah(latestClose)} />
+            <Metric label="SMA 20" value={hasSma20 ? formatRupiah(result.trend.sma20) : "Belum cukup data"} />
+            <Metric label="SMA 50" value={hasSma50 ? formatRupiah(result.trend.sma50) : "Belum cukup data"} />
+          </div>
+          <div className={`mt-4 rounded-lg p-4 text-sm leading-6 ring-1 ${trendExplanation.className}`}>
+            <p className="font-semibold">{trendExplanation.title}</p>
+            <p className="mt-1">{trendExplanation.body}</p>
+          </div>
+        </div>
+        <ScoreBreakdownChart result={result} />
       </div>
 
       <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
@@ -93,7 +119,7 @@ export function AnalyzerResult({
           {result.entryZones.note}
         </p>
 
-        <div className="mt-5 rounded-lg bg-rose-50 p-4">
+        <div className="mt-5 rounded-lg border border-rose-100 bg-rose-50 p-4">
           <h3 className="font-semibold text-rose-950">Kondisi jangan beli</h3>
           <ul className="mt-2 space-y-1 text-sm leading-6 text-rose-900">
             {result.doNotBuyWarnings.map((warning) => (
@@ -183,4 +209,35 @@ function verdictLabel(verdict: AnalysisResult["verdict"]) {
   if (verdict === "BUY") return "BELI";
   if (verdict === "WAIT") return "TUNGGU";
   return "HINDARI";
+}
+
+function buildTrendExplanation(result: AnalysisResult) {
+  const latest = result.trend.latestPrice;
+  const sma20 = result.trend.sma20;
+  const sma50 = result.trend.sma50;
+
+  if (result.trend.dataPoints < 20 || sma20 <= 0) {
+    return {
+      title: "Tren belum kuat dibaca",
+      body: "Data kurang dari 20 titik, jadi garis SMA disembunyikan dan keputusan perlu divalidasi dengan sumber lain.",
+      className: "bg-amber-50 text-amber-950 ring-amber-100",
+    };
+  }
+
+  const aboveSma20 = latest >= sma20;
+  const aboveSma50 = result.trend.dataPoints >= 50 && sma50 > 0 ? latest >= sma50 : null;
+
+  if (aboveSma20 && aboveSma50 !== false) {
+    return {
+      title: "Harga berada di atas SMA",
+      body: "Harga di atas SMA biasanya menunjukkan tren yang lebih sehat, terutama jika SMA20 juga tidak melemah terhadap SMA50.",
+      className: "bg-emerald-50 text-emerald-950 ring-emerald-100",
+    };
+  }
+
+  return {
+    title: "Harga berada di bawah SMA",
+    body: "Harga di bawah SMA menandakan tren lebih lemah. Sistem lebih konservatif sampai ada pemulihan harga atau momentum.",
+    className: "bg-rose-50 text-rose-950 ring-rose-100",
+  };
 }

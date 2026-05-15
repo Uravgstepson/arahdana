@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { AllocationCard } from "@/components/AllocationCard";
+import { AllocationChart } from "@/components/AllocationChart";
+import { PortfolioPerformanceChart } from "@/components/PortfolioPerformanceChart";
 import { StatCard } from "@/components/StatCard";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type { InvestmentType, PortfolioItem, RiskCategory, WatchlistItem } from "@/lib/types/investment";
 import { dataSourceLabel } from "@/lib/providers/marketClient";
 import { formatPercent, formatRupiah, investmentTypeLabel, nonNegativeNumber } from "@/lib/utils/format";
-import { samplePortfolio, sampleWatchlist } from "@/lib/utils/sampleData";
+import { sampleWatchlist } from "@/lib/utils/sampleData";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
 
 type Performer = {
@@ -18,10 +19,10 @@ type Performer = {
 };
 
 export default function DashboardPage() {
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(samplePortfolio);
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(sampleWatchlist);
-  const [portfolioIsMock, setPortfolioIsMock] = useState(true);
   const [watchlistIsMock, setWatchlistIsMock] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
 
   useEffect(() => {
@@ -30,20 +31,23 @@ export default function DashboardPage() {
       const storedWatchlist = localArahDanaStorage.readWatchlist();
       const storedSettings = localArahDanaStorage.readSettings();
 
-      setPortfolio(Array.isArray(storedPortfolio) ? storedPortfolio.map(normalizePortfolioItem) : samplePortfolio);
+      setPortfolio(Array.isArray(storedPortfolio) ? storedPortfolio.map(normalizePortfolioItem) : []);
       setWatchlist(Array.isArray(storedWatchlist) ? storedWatchlist : sampleWatchlist);
-      setPortfolioIsMock(!storedPortfolio);
       setWatchlistIsMock(!storedWatchlist);
       if (storedSettings && typeof storedSettings.aprMoneyMarketFund === "number" && Number.isFinite(storedSettings.aprMoneyMarketFund)) {
         setAprMoneyMarketFund(nonNegativeNumber(storedSettings.aprMoneyMarketFund));
       }
+      setIsHydrated(true);
     }, 0);
   }, []);
 
   const metrics = useMemo(() => calculateDashboardMetrics(portfolio, aprMoneyMarketFund), [aprMoneyMarketFund, portfolio]);
-  const dataSource = portfolioIsMock
-    ? "Data contoh"
-    : portfolio.some((item) => item.dataSource === "live_public_market_data")
+  const hasPortfolio = portfolio.length > 0;
+  const dataSource = !isHydrated
+    ? "Memuat portofolio lokal"
+    : !hasPortfolio
+      ? "Belum ada portofolio lokal"
+      : portfolio.some((item) => item.dataSource === "live_public_market_data")
       ? "Data pasar publik langsung + portofolio lokal"
       : portfolio.some((item) => item.dataSource === "bibit_import" || item.dataSource === "savings_import" || item.dataSource === "semi_auto_import")
         ? "Impor semi-otomatis + portofolio lokal"
@@ -64,36 +68,36 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total modal" value={formatRupiah(metrics.invested)} helper={portfolioIsMock ? "Data portofolio contoh" : "Portofolio lokal tersimpan"} />
+        <StatCard label="Total modal" value={formatRupiah(metrics.invested)} helper={hasPortfolio ? "Portofolio lokal tersimpan" : "Belum ada kepemilikan"} />
         <StatCard label="Nilai kini" value={formatRupiah(metrics.current)} helper={dataSource} />
         <StatCard label="Total untung/rugi" value={formatRupiah(metrics.profit)} helper={formatPercent(metrics.profitPercent)} tone={metrics.profit >= 0 ? "good" : "bad"} />
         <StatCard label="Eksposur risiko" value={metrics.riskSummary.label} helper={metrics.riskSummary.detail} />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold">Alokasi berdasarkan jenis instrumen</h2>
-            <Link className="text-sm font-semibold text-emerald-700" href="/portfolio">Perbarui harga</Link>
-          </div>
-          <p className="mt-2 text-sm text-stone-500">
-            Alokasi dihitung dari harga terbaru/kini yang tersimpan di localStorage.
+      {!hasPortfolio && isHydrated ? (
+        <section className="rounded-lg border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
+          <h2 className="text-lg font-semibold text-stone-950">Portofolio masih kosong</h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+            Tambahkan kepemilikan manual atau impor dari file agar dasbor menampilkan alokasi, nilai kini, P/L, dan risiko dari data lokal Anda sendiri.
           </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {metrics.allocation.length > 0 ? metrics.allocation.map((item) => (
-              <AllocationCard
-                key={item.type}
-                label={investmentTypeLabel(item.type)}
-                value={`${item.percent}%`}
-                detail={formatRupiah(item.value)}
-              />
-            )) : (
-              <div className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
-                Belum ada alokasi. Tambahkan kepemilikan manual dulu.
-              </div>
-            )}
-          </div>
+          <Link className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm" href="/portfolio">
+            Tambah portofolio
+          </Link>
         </section>
+      ) : null}
+
+      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <AllocationChart
+          title="Alokasi berdasarkan jenis instrumen"
+          description="Dihitung dari harga terbaru/kini yang tersimpan di localStorage."
+          data={metrics.allocation.map((item) => ({
+            key: item.type,
+            label: investmentTypeLabel(item.type),
+            value: item.value,
+            percent: item.percent,
+          }))}
+          emptyMessage="Belum ada alokasi. Tambahkan kepemilikan manual dulu."
+        />
 
         <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Ringkasan performa</h2>
@@ -102,6 +106,21 @@ export default function DashboardPage() {
             <PerformerCard title="Performa terlemah" performer={metrics.worstPerformer} tone="bad" />
           </div>
         </section>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <PortfolioPerformanceChart items={portfolio} aprMoneyMarketFund={aprMoneyMarketFund} />
+        <AllocationChart
+          title="Eksposur risiko"
+          description="Komposisi risiko berdasarkan nilai kini portofolio lokal."
+          data={metrics.riskExposure.map((item) => ({
+            key: item.risk,
+            label: riskLabel(item.risk),
+            value: item.value,
+            percent: item.percent,
+          }))}
+          emptyMessage="Belum ada data risiko untuk dihitung."
+        />
       </div>
 
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
@@ -167,6 +186,19 @@ function calculateDashboardMetrics(items: PortfolioItem[], aprMoneyMarketFund: n
     value,
     percent: current > 0 ? Math.round((value / current) * 100) : 0,
   }));
+  const riskExposureMap = items.reduce<Record<RiskCategory, number>>(
+    (acc, item) => {
+      const { currentPriceUsed } = computePortfolioCurrentPrice(item, { aprMoneyMarketFund });
+      acc[item.riskCategory] += currentPriceUsed * item.quantity;
+      return acc;
+    },
+    { low: 0, medium: 0, high: 0 },
+  );
+  const riskExposure = Object.entries(riskExposureMap).map(([risk, value]) => ({
+    risk: risk as RiskCategory,
+    value,
+    percent: current > 0 ? Math.round((value / current) * 100) : 0,
+  }));
   const performers = items.map((item) => {
     const itemInvested = item.buyPrice * item.quantity;
     const { currentPriceUsed } = computePortfolioCurrentPrice(item, { aprMoneyMarketFund });
@@ -186,6 +218,7 @@ function calculateDashboardMetrics(items: PortfolioItem[], aprMoneyMarketFund: n
     profit,
     profitPercent,
     allocation,
+    riskExposure,
     topGainer: performers.length ? performers.reduce((best, item) => (item.profitPercent > best.profitPercent ? item : best)) : null,
     worstPerformer: performers.length ? performers.reduce((worst, item) => (item.profitPercent < worst.profitPercent ? item : worst)) : null,
     riskSummary,
@@ -221,6 +254,12 @@ function watchlistStatusLabel(status: WatchlistItem["status"]) {
   if (status === "waiting") return "Menunggu";
   if (status === "avoid") return "Hindari";
   return "Sudah dibeli";
+}
+
+function riskLabel(risk: RiskCategory) {
+  if (risk === "high") return "Risiko tinggi";
+  if (risk === "medium") return "Risiko sedang";
+  return "Risiko rendah";
 }
 
 function normalizePortfolioItem(item: PortfolioItem): PortfolioItem {

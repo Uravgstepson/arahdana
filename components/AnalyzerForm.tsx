@@ -368,6 +368,7 @@ export function AnalyzerForm() {
       ) : (
         <AnalyzerResult
           result={result}
+          prices={priceSource.prices}
           dataSourceLabel={priceSource.label}
           isMockData={priceSource.isMock}
         />
