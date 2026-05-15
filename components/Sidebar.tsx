@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { clampNumber, cn } from "@/lib/utils/format";
 
 const nav = [
@@ -13,6 +14,7 @@ const nav = [
   { href: "/market-prices", label: "Harga Pasar", shortLabel: "Pasar", icon: "MK" },
   { href: "/settings", label: "Pengaturan", shortLabel: "Setelan", icon: "ST" },
   { href: "/integrations", label: "Integrasi", shortLabel: "Integrasi", icon: "IN" },
+  { href: "/profile", label: "Akun", shortLabel: "Akun", icon: "AK" },
 ];
 
 const primaryNav = nav.slice(0, 3);
@@ -268,6 +270,9 @@ export function Sidebar() {
         Impor portofolio semi-otomatis tersimpan lokal. Kredensial bank,
         e-wallet, atau Bibit tidak diminta maupun disimpan.
       </div>
+      <p className="mt-4 hidden px-2 text-[0.68rem] font-medium tracking-[0.08em] text-stone-400 lg:block">
+        {APP_VERSION_LABEL}
+      </p>
     </aside>
   );
 }

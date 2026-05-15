@@ -1,0 +1,9 @@
+import type { UserSettings } from "@/lib/types/investment";
+
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  capital: 10_000_000,
+  riskTolerance: 15,
+  timeHorizon: "medium",
+  preferredInstruments: ["money_market_fund", "bond_fund", "stock"],
+  aprMoneyMarketFund: 0.05,
+};

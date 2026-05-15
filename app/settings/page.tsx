@@ -1,23 +1,25 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useState } from "react";
 import type { InvestmentType, TimeHorizon, UserSettings } from "@/lib/types/investment";
+import { AccountPanel } from "@/components/AccountPanel";
 import { InstrumentOptions } from "@/components/PortfolioTable";
+import { APP_VERSION_LABEL } from "@/lib/appMeta";
+import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
+import { createBackup, validateBackupJson } from "@/lib/storage/backup";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { clampNumber, formatRupiah, investmentTypeLabel, nonNegativeNumber } from "@/lib/utils/format";
 
-const defaults: UserSettings = {
-  capital: 10_000_000,
-  riskTolerance: 15,
-  timeHorizon: "medium",
-  preferredInstruments: ["money_market_fund", "bond_fund", "stock"],
-  aprMoneyMarketFund: 0.05,
-};
+const defaults = DEFAULT_USER_SETTINGS;
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<UserSettings>(defaults);
   const [preferred, setPreferred] = useState<InvestmentType>("stock");
   const [clearStatus, setClearStatus] = useState("");
+  const [backupStatus, setBackupStatus] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export default function SettingsPage() {
         : { ...current, preferredInstruments: [...current.preferredInstruments, preferred] },
     );
     setClearStatus("");
+    setBackupStatus(null);
   }
 
   function removePreferred(type: InvestmentType) {
@@ -47,6 +50,7 @@ export default function SettingsPage() {
       preferredInstruments: current.preferredInstruments.filter((item) => item !== type),
     }));
     setClearStatus("");
+    setBackupStatus(null);
   }
 
   function clearAllData() {
@@ -59,10 +63,69 @@ export default function SettingsPage() {
     setSettings(defaults);
     setPreferred("stock");
     setClearStatus("Data portofolio, pantauan, dan pengaturan lokal sudah dihapus.");
+    setBackupStatus(null);
+  }
+
+  function exportBackup() {
+    const backup = createBackup(
+      localArahDanaStorage.readPortfolio(),
+      localArahDanaStorage.readWatchlist(),
+      localArahDanaStorage.readSettings(),
+      defaults,
+    );
+    const filename = `arahdana-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: "application/json",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setClearStatus("");
+    setBackupStatus({
+      tone: "success",
+      message: "Backup JSON berhasil dibuat.",
+    });
+  }
+
+  async function importBackup(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const validation = validateBackupJson(await file.text(), defaults);
+      if (!validation.ok) {
+        setClearStatus("");
+        setBackupStatus({ tone: "error", message: validation.message });
+        return;
+      }
+
+      localArahDanaStorage.writePortfolio(validation.backup.portfolio);
+      localArahDanaStorage.writeWatchlist(validation.backup.watchlist);
+      localArahDanaStorage.writeSettings(validation.backup.settings);
+      setSettings(validation.backup.settings);
+      setPreferred("stock");
+      setClearStatus("");
+      setBackupStatus({
+        tone: "success",
+        message: `Backup berhasil diimpor: ${validation.backup.portfolio.length} portofolio, ${validation.backup.watchlist.length} pantauan, dan settings dipulihkan.`,
+      });
+    } catch {
+      setClearStatus("");
+      setBackupStatus({
+        tone: "error",
+        message: "Backup gagal dibaca. Coba pilih file JSON lain.",
+      });
+    }
   }
 
   return (
     <div className="grid max-w-4xl gap-5">
+      <AccountPanel />
+
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold">Asumsi bawaan</h2>
         <p className="mt-2 text-sm leading-6 text-stone-600">
@@ -141,6 +204,39 @@ export default function SettingsPage() {
         <p className="mt-2 text-sm leading-6 text-stone-600">
           ArahDana V1 hanya menyimpan data portofolio, pantauan, dan pengaturan di browser ini. Kredensial bank, e-wallet, atau Bibit tidak disimpan.
         </p>
+        <div className="mt-4 rounded-lg bg-stone-100 p-4">
+          <h3 className="text-sm font-semibold text-stone-950">Backup data lokal</h3>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Ekspor atau impor portofolio, pantauan, dan pengaturan sebagai file JSON.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={exportBackup}
+              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
+            >
+              Ekspor JSON
+            </button>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-stone-700 ring-1 ring-stone-200 hover:bg-stone-50">
+              Impor JSON
+              <input
+                className="sr-only"
+                type="file"
+                accept="application/json,.json"
+                onChange={importBackup}
+              />
+            </label>
+          </div>
+          {backupStatus ? (
+            <p
+              className={`mt-3 text-sm font-medium ${
+                backupStatus.tone === "success" ? "text-emerald-700" : "text-rose-700"
+              }`}
+            >
+              {backupStatus.message}
+            </p>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={clearAllData}
@@ -150,6 +246,7 @@ export default function SettingsPage() {
         </button>
         {clearStatus ? <p className="mt-3 text-sm font-medium text-emerald-700">{clearStatus}</p> : null}
       </section>
+      <p className="px-2 text-xs font-medium text-stone-400">{APP_VERSION_LABEL}</p>
     </div>
   );
 }

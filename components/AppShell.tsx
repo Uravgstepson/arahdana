@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Disclaimer } from "@/components/Disclaimer";
+import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { cn } from "@/lib/utils/format";
 
 const titles: Record<string, string> = {
@@ -14,6 +15,7 @@ const titles: Record<string, string> = {
   "/market-prices": "Harga Pasar",
   "/settings": "Pengaturan",
   "/integrations": "Integrasi",
+  "/profile": "Akun",
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -57,6 +59,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div key={pathname} className="page-flow mt-5">
           {children}
         </div>
+        <footer className="mt-8 text-center text-[0.68rem] font-medium tracking-[0.08em] text-stone-400 lg:hidden">
+          {APP_VERSION_LABEL}
+        </footer>
       </main>
     </div>
   );
