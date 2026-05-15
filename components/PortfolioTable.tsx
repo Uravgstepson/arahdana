@@ -29,10 +29,12 @@ import {
 } from "@/lib/utils/format";
 import type { CellValue } from "read-excel-file/browser";
 import { AllocationChart } from "@/components/AllocationChart";
+import { useAuth } from "@/components/AuthProvider";
 import { RiskBadge } from "@/components/RiskBadge";
 import { InstrumentBadge } from "@/components/InstrumentBadge";
 import { normalizeMarketTicker } from "@/lib/market/tickerUniverse";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
+import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
 
 type PortfolioForm = Omit<PortfolioItem, "id">;
 
@@ -55,6 +57,7 @@ Mutual,Manulife Saham Andalan,reksadana saham,,2100,1100,2250,2026-05-01,Reksa D
 Mutual,Ashmore Dana Ekuitas Nusantara,reksadana saham,,1800,1400,1920,2026-05-01,Reksa Dana Saham populer`;
 
 export function PortfolioTable() {
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
   const [form, setForm] = useState<PortfolioForm>(() =>
@@ -76,6 +79,7 @@ export function PortfolioTable() {
   const [importFileMessage, setImportFileMessage] = useState("");
   const [importFileError, setImportFileError] = useState("");
   const [isReadingImportFile, setIsReadingImportFile] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("Memuat mode penyimpanan...");
 
   const importPreview = useMemo(
     () => parsePortfolioImport(importText),
@@ -83,27 +87,78 @@ export function PortfolioTable() {
   );
 
   useEffect(() => {
-    window.setTimeout(() => {
-      const saved = localArahDanaStorage.readPortfolio();
-      const storedItems = Array.isArray(saved)
-        ? normalizePortfolioItems(saved)
-        : null;
-      setItems(storedItems ?? []);
-      setHasStoredPortfolio(storedItems !== null);
+    if (isAuthLoading) return;
 
-      const settings = localArahDanaStorage.readSettings();
-      if (settings && typeof settings.aprMoneyMarketFund === "number" && Number.isFinite(settings.aprMoneyMarketFund)) {
-        setAprMoneyMarketFund(nonNegativeNumber(settings.aprMoneyMarketFund));
-      }
-      setIsHydrated(true);
+    let isMounted = true;
+    window.setTimeout(() => {
+      void (async () => {
+        const saved = localArahDanaStorage.readPortfolio();
+        const storedItems = Array.isArray(saved)
+          ? normalizePortfolioItems(saved)
+          : null;
+
+        const settings = localArahDanaStorage.readSettings();
+        if (settings && typeof settings.aprMoneyMarketFund === "number" && Number.isFinite(settings.aprMoneyMarketFund)) {
+          if (isMounted) setAprMoneyMarketFund(nonNegativeNumber(settings.aprMoneyMarketFund));
+        }
+
+        if (!user) {
+          if (!isMounted) return;
+          setItems(storedItems ?? []);
+          setHasStoredPortfolio(storedItems !== null);
+          setSyncMessage("Login untuk sinkronisasi antar perangkat.");
+          setIsHydrated(true);
+          return;
+        }
+
+        try {
+          const cloudItems = await loadCloudPortfolio(user);
+          if (!isMounted) return;
+          const nextItems = cloudItems.length > 0 ? cloudItems : storedItems ?? [];
+          setItems(nextItems);
+          setHasStoredPortfolio(true);
+          localArahDanaStorage.writePortfolio(nextItems);
+          setSyncMessage(
+            cloudItems.length > 0
+              ? "Cloud sync enabled. Holding dimuat dari Supabase dan dicadangkan lokal."
+              : "Cloud sync enabled. Belum ada holding cloud; data lokal akan dicadangkan saat berubah.",
+          );
+        } catch (error) {
+          if (!isMounted) return;
+          setItems(storedItems ?? []);
+          setHasStoredPortfolio(storedItems !== null);
+          setSyncMessage(
+            error instanceof Error
+              ? `Cloud sync gagal, memakai localStorage. ${error.message}`
+              : "Cloud sync gagal, memakai localStorage.",
+          );
+        } finally {
+          if (isMounted) setIsHydrated(true);
+        }
+      })();
     }, 0);
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
-    if (!hasStoredPortfolio) return;
     localArahDanaStorage.writePortfolio(items);
-  }, [hasStoredPortfolio, isHydrated, items]);
+    if (!user) return;
+
+    void saveCloudPortfolio(user, items)
+      .then(() => {
+        setSyncMessage("Cloud sync enabled. Portofolio tersimpan di Supabase dan localStorage.");
+      })
+      .catch((error) => {
+        setSyncMessage(
+          error instanceof Error
+            ? `Local backup tersimpan, cloud sync gagal. ${error.message}`
+            : "Local backup tersimpan, cloud sync gagal.",
+        );
+      });
+  }, [isHydrated, items, user]);
 
   const totals = useMemo(() => {
     const summary = items.reduce(
@@ -443,6 +498,27 @@ export function PortfolioTable() {
 
   return (
     <div className="space-y-5">
+      <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-stone-950">Mode penyimpanan</p>
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Mode lokal menyimpan data hanya di browser ini. Cloud sync menyimpan data ke akun Supabase agar bisa dipakai di perangkat lain.
+            </p>
+          </div>
+          <span
+            className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
+              user
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                : "bg-amber-50 text-amber-800 ring-amber-100"
+            }`}
+          >
+            {user ? "Cloud sync enabled" : isConfigured ? "Local mode" : "Local mode"}
+          </span>
+        </div>
+        <p className="mt-3 text-sm font-medium text-stone-600">{syncMessage}</p>
+      </section>
+
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>

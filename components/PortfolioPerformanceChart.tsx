@@ -6,7 +6,6 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -14,7 +13,7 @@ import {
 import type { PortfolioItem } from "@/lib/types/investment";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
 import { formatRupiah } from "@/lib/utils/format";
-import { useIsClient } from "@/components/useIsClient";
+import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 type PerformancePoint = {
   name: string;
@@ -30,7 +29,6 @@ export function PortfolioPerformanceChart({
   items: PortfolioItem[];
   aprMoneyMarketFund: number;
 }) {
-  const isMounted = useIsClient();
   const chartData = useMemo(
     () => buildPerformanceData(items, aprMoneyMarketFund),
     [aprMoneyMarketFund, items],
@@ -48,10 +46,9 @@ export function PortfolioPerformanceChart({
           Tambahkan kepemilikan untuk melihat performa portofolio.
         </div>
       ) : (
-        <div className="mt-5 h-72 w-full">
-          {isMounted ? (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+        <MeasuredChartFrame className="mt-5 h-72 w-full">
+          {({ width, height }) => (
+              <ComposedChart width={width} height={height} data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
                 <CartesianGrid stroke="#e7edf3" strokeDasharray="3 3" />
                 <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} tickLine={false} minTickGap={20} />
                 <YAxis width={78} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={compactRupiah} />
@@ -60,11 +57,8 @@ export function PortfolioPerformanceChart({
                 <Bar dataKey="current" name="Nilai kini" fill="#087f5b" radius={[7, 7, 0, 0]} />
                 <Line type="monotone" dataKey="profit" name="P/L" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
               </ComposedChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartSkeleton />
           )}
-        </div>
+        </MeasuredChartFrame>
       )}
     </section>
   );
@@ -119,8 +113,4 @@ function compactRupiah(value: number) {
   if (Math.abs(value) >= 1_000_000) return `${Math.round(value / 1_000_000)} jt`;
   if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)} rb`;
   return value.toLocaleString("id-ID");
-}
-
-function ChartSkeleton() {
-  return <div className="h-full w-full animate-pulse rounded-lg bg-stone-100" />;
 }

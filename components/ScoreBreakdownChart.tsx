@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 import type { AnalysisResult } from "@/lib/types/investment";
-import { useIsClient } from "@/components/useIsClient";
+import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 type ScorePoint = {
   label: string;
@@ -11,7 +11,6 @@ type ScorePoint = {
 };
 
 export function ScoreBreakdownChart({ result }: { result: AnalysisResult }) {
-  const isMounted = useIsClient();
   const chartData = useMemo(() => buildScoreBreakdown(result), [result]);
 
   return (
@@ -20,21 +19,17 @@ export function ScoreBreakdownChart({ result }: { result: AnalysisResult }) {
         <h2 className="text-lg font-semibold text-stone-950">Breakdown skor</h2>
         <p className="mt-1 text-sm text-stone-500">Komponen utama yang membentuk sinyal BUY / WAIT / AVOID.</p>
       </div>
-      <div className="mt-5 h-72 w-full">
-        {isMounted ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-            <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 16, left: 18, bottom: 4 }}>
+      <MeasuredChartFrame className="mt-5 h-72 w-full">
+        {({ width, height }) => (
+            <BarChart width={width} height={height} data={chartData} layout="vertical" margin={{ top: 4, right: 16, left: 18, bottom: 4 }}>
               <CartesianGrid stroke="#e7edf3" strokeDasharray="3 3" />
               <XAxis type="number" domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 12 }} />
               <YAxis type="category" dataKey="label" width={132} tick={{ fill: "#334155", fontSize: 12 }} />
               <Tooltip content={<ScoreTooltip />} />
               <Bar dataKey="score" name="Skor" fill="#087f5b" radius={[0, 7, 7, 0]} />
             </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <ChartSkeleton />
         )}
-      </div>
+      </MeasuredChartFrame>
     </section>
   );
 }
@@ -80,8 +75,4 @@ function scoreMomentum(momentum: number) {
 function clamp(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
-}
-
-function ChartSkeleton() {
-  return <div className="h-full w-full animate-pulse rounded-lg bg-stone-100" />;
 }

@@ -1,18 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import type { PricePoint } from "@/lib/types/investment";
 import { formatRupiah } from "@/lib/utils/format";
-import { useIsClient } from "@/components/useIsClient";
+import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 type ChartPoint = {
   date: string;
@@ -30,7 +22,6 @@ export function PriceChart({
   isMockData: boolean;
   sourceLabel: string;
 }) {
-  const isMounted = useIsClient();
   const chartData = useMemo(() => buildPriceChartData(prices), [prices]);
   const hasLimitedHistory = chartData.length > 0 && chartData.length < 20;
   const showSma20 = chartData.length >= 20;
@@ -61,10 +52,9 @@ export function PriceChart({
           Belum ada data harga valid untuk digambar.
         </div>
       ) : (
-        <div className="mt-5 h-72 w-full">
-          {isMounted ? (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+        <MeasuredChartFrame className="mt-5 h-72 w-full">
+          {({ width, height }) => (
+              <LineChart width={width} height={height} data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
                 <CartesianGrid stroke="#e7edf3" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="date"
@@ -111,11 +101,8 @@ export function PriceChart({
                   />
                 ) : null}
               </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartSkeleton />
           )}
-        </div>
+        </MeasuredChartFrame>
       )}
 
       {hasLimitedHistory ? (
@@ -184,10 +171,6 @@ function LegendItem({ color, label }: { color: string; label: string }) {
       {label}
     </span>
   );
-}
-
-function ChartSkeleton() {
-  return <div className="h-full w-full animate-pulse rounded-lg bg-stone-100" />;
 }
 
 function compactRupiah(value: number) {

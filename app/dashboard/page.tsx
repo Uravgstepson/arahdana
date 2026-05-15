@@ -5,12 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { AllocationChart } from "@/components/AllocationChart";
 import { PortfolioPerformanceChart } from "@/components/PortfolioPerformanceChart";
 import { StatCard } from "@/components/StatCard";
+import { useAuth } from "@/components/AuthProvider";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type { InvestmentType, PortfolioItem, RiskCategory, WatchlistItem } from "@/lib/types/investment";
 import { dataSourceLabel } from "@/lib/providers/marketClient";
 import { formatPercent, formatRupiah, investmentTypeLabel, nonNegativeNumber } from "@/lib/utils/format";
-import { sampleWatchlist } from "@/lib/utils/sampleData";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
+import { loadCloudPortfolio, loadCloudSettings, loadCloudWatchlist } from "@/lib/supabase/sync";
 
 type Performer = {
   item: PortfolioItem;
@@ -19,34 +20,81 @@ type Performer = {
 };
 
 export default function DashboardPage() {
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>(sampleWatchlist);
-  const [watchlistIsMock, setWatchlistIsMock] = useState(true);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [watchlistIsCloud, setWatchlistIsCloud] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
 
   useEffect(() => {
-    window.setTimeout(() => {
-      const storedPortfolio = localArahDanaStorage.readPortfolio();
-      const storedWatchlist = localArahDanaStorage.readWatchlist();
-      const storedSettings = localArahDanaStorage.readSettings();
+    if (isAuthLoading) return;
+    let isMounted = true;
 
-      setPortfolio(Array.isArray(storedPortfolio) ? storedPortfolio.map(normalizePortfolioItem) : []);
-      setWatchlist(Array.isArray(storedWatchlist) ? storedWatchlist : sampleWatchlist);
-      setWatchlistIsMock(!storedWatchlist);
-      if (storedSettings && typeof storedSettings.aprMoneyMarketFund === "number" && Number.isFinite(storedSettings.aprMoneyMarketFund)) {
-        setAprMoneyMarketFund(nonNegativeNumber(storedSettings.aprMoneyMarketFund));
-      }
-      setIsHydrated(true);
+    window.setTimeout(() => {
+      void (async () => {
+        const storedPortfolio = localArahDanaStorage.readPortfolio();
+        const storedWatchlist = localArahDanaStorage.readWatchlist();
+        const storedSettings = localArahDanaStorage.readSettings();
+        const localPortfolio = Array.isArray(storedPortfolio) ? storedPortfolio.map(normalizePortfolioItem) : [];
+        const localWatchlist = Array.isArray(storedWatchlist) ? storedWatchlist : [];
+
+        if (!user) {
+          if (!isMounted) return;
+          setPortfolio(localPortfolio);
+          setWatchlist(localWatchlist);
+          setWatchlistIsCloud(false);
+          if (storedSettings && typeof storedSettings.aprMoneyMarketFund === "number" && Number.isFinite(storedSettings.aprMoneyMarketFund)) {
+            setAprMoneyMarketFund(nonNegativeNumber(storedSettings.aprMoneyMarketFund));
+          }
+          setIsHydrated(true);
+          return;
+        }
+
+        try {
+          const [cloudPortfolio, cloudWatchlist, cloudSettings] = await Promise.all([
+            loadCloudPortfolio(user),
+            loadCloudWatchlist(user),
+            loadCloudSettings(user),
+          ]);
+          if (!isMounted) return;
+          const nextPortfolio = cloudPortfolio.length > 0 ? cloudPortfolio : localPortfolio;
+          const nextWatchlist = cloudWatchlist.length > 0 ? cloudWatchlist : localWatchlist;
+          setPortfolio(nextPortfolio);
+          setWatchlist(nextWatchlist);
+          setWatchlistIsCloud(cloudWatchlist.length > 0);
+          localArahDanaStorage.writePortfolio(nextPortfolio);
+          localArahDanaStorage.writeWatchlist(nextWatchlist);
+          if (cloudSettings) {
+            localArahDanaStorage.writeSettings(cloudSettings);
+            setAprMoneyMarketFund(nonNegativeNumber(cloudSettings.aprMoneyMarketFund ?? 0.05));
+          } else if (storedSettings && typeof storedSettings.aprMoneyMarketFund === "number" && Number.isFinite(storedSettings.aprMoneyMarketFund)) {
+            setAprMoneyMarketFund(nonNegativeNumber(storedSettings.aprMoneyMarketFund));
+          }
+        } catch {
+          if (!isMounted) return;
+          setPortfolio(localPortfolio);
+          setWatchlist(localWatchlist);
+          setWatchlistIsCloud(false);
+          if (storedSettings && typeof storedSettings.aprMoneyMarketFund === "number" && Number.isFinite(storedSettings.aprMoneyMarketFund)) {
+            setAprMoneyMarketFund(nonNegativeNumber(storedSettings.aprMoneyMarketFund));
+          }
+        } finally {
+          if (isMounted) setIsHydrated(true);
+        }
+      })();
     }, 0);
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, user]);
 
   const metrics = useMemo(() => calculateDashboardMetrics(portfolio, aprMoneyMarketFund), [aprMoneyMarketFund, portfolio]);
   const hasPortfolio = portfolio.length > 0;
   const dataSource = !isHydrated
     ? "Memuat portofolio lokal"
-    : !hasPortfolio
-      ? "Belum ada portofolio lokal"
+      : !hasPortfolio
+      ? user ? "Belum ada portofolio cloud/lokal" : "Belum ada portofolio lokal"
       : portfolio.some((item) => item.dataSource === "live_public_market_data")
       ? "Data pasar publik langsung + portofolio lokal"
       : portfolio.some((item) => item.dataSource === "bibit_import" || item.dataSource === "savings_import" || item.dataSource === "semi_auto_import")
@@ -128,7 +176,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-lg font-semibold">Pratinjau pantauan</h2>
             <p className="mt-1 text-sm text-stone-500">
-              {watchlistIsMock ? "Data contoh" : "Input manual dari localStorage"}
+              {user && watchlistIsCloud ? "Cloud sync enabled" : isConfigured ? "Local mode" : "Local mode"}
             </p>
           </div>
           <Link className="text-sm font-semibold text-emerald-700" href="/watchlist">Kelola pantauan</Link>
@@ -141,6 +189,11 @@ export default function DashboardPage() {
               <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">{watchlistStatusLabel(item.status)}</p>
             </div>
           ))}
+          {watchlist.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 md:col-span-3">
+              Belum ada pantauan. Tambahkan ticker atau zona target di halaman Pantauan.
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

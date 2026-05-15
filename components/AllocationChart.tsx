@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
 import { formatRupiah } from "@/lib/utils/format";
-import { useIsClient } from "@/components/useIsClient";
+import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 export type AllocationDatum = {
   key: string;
@@ -25,7 +25,6 @@ export function AllocationChart({
   data: AllocationDatum[];
   emptyMessage?: string;
 }) {
-  const isMounted = useIsClient();
   const chartData = useMemo(() => normalizeData(data), [data]);
 
   return (
@@ -41,10 +40,9 @@ export function AllocationChart({
         </div>
       ) : (
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(260px,1fr)]">
-          <div className="h-64 min-w-0">
-            {isMounted ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <PieChart>
+          <MeasuredChartFrame className="h-64 min-w-0">
+            {({ width, height }) => (
+                <PieChart width={width} height={height}>
                   <Pie data={chartData} dataKey="value" nameKey="label" innerRadius="58%" outerRadius="86%" paddingAngle={3}>
                     {chartData.map((item, index) => (
                       <Cell key={item.key} fill={COLORS[index % COLORS.length]} />
@@ -52,11 +50,8 @@ export function AllocationChart({
                   </Pie>
                   <Tooltip content={<AllocationTooltip />} />
                 </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <ChartSkeleton />
             )}
-          </div>
+          </MeasuredChartFrame>
           <div className="grid content-center gap-3">
             {chartData.map((item, index) => (
               <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-stone-100 p-3">
@@ -104,8 +99,4 @@ function AllocationTooltip({
       <p className="text-xs font-semibold text-emerald-700">{item.percent}% portofolio</p>
     </div>
   );
-}
-
-function ChartSkeleton() {
-  return <div className="h-full w-full animate-pulse rounded-lg bg-stone-100" />;
 }

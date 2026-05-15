@@ -15,6 +15,7 @@ const nav = [
   { href: "/settings", label: "Pengaturan", shortLabel: "Setelan", icon: "ST" },
   { href: "/integrations", label: "Integrasi", shortLabel: "Integrasi", icon: "IN" },
   { href: "/profile", label: "Akun", shortLabel: "Akun", icon: "AK" },
+  { href: "/login", label: "Login", shortLabel: "Login", icon: "LG" },
 ];
 
 const primaryNav = nav.slice(0, 3);

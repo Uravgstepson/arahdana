@@ -14,9 +14,10 @@ import {
   dataSourceLabel,
   fetchPublicMarketData,
 } from "@/lib/providers/marketClient";
-import { sampleWatchlist } from "@/lib/utils/sampleData";
 import { InstrumentOptions } from "@/components/PortfolioTable";
 import { InstrumentBadge } from "@/components/InstrumentBadge";
+import { useAuth } from "@/components/AuthProvider";
+import { loadCloudWatchlist, saveCloudWatchlist } from "@/lib/supabase/sync";
 
 type WatchlistForm = Omit<WatchlistItem, "id">;
 type WatchlistAnalysisState = Record<
@@ -29,7 +30,8 @@ type WatchlistAnalysisState = Record<
 >;
 
 export default function WatchlistPage() {
-  const [items, setItems] = useState<WatchlistItem[]>(sampleWatchlist);
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
+  const [items, setItems] = useState<WatchlistItem[]>([]);
   const [form, setForm] = useState<WatchlistForm>(() =>
     createEmptyWatchlistForm(),
   );
@@ -41,30 +43,84 @@ export default function WatchlistPage() {
     riskTolerance: 15,
     timeHorizon: "medium" as TimeHorizon,
   });
+  const [syncMessage, setSyncMessage] = useState("Memuat mode penyimpanan...");
 
   useEffect(() => {
+    if (isAuthLoading) return;
+    let isMounted = true;
+
     window.setTimeout(() => {
-      setItems(readStoredWatchlist());
-      const settings = localArahDanaStorage.readSettings();
-      setAnalysisDefaults({
-        capital: Number.isFinite(settings?.capital)
-          ? (settings?.capital ?? 10_000_000)
-          : 10_000_000,
-        riskTolerance: Number.isFinite(settings?.riskTolerance)
-          ? (settings?.riskTolerance ?? 15)
-          : 15,
-        timeHorizon: isTimeHorizon(settings?.timeHorizon)
-          ? settings.timeHorizon
-          : "medium",
-      });
-      setIsHydrated(true);
+      void (async () => {
+        const storedItems = readStoredWatchlist();
+        const settings = localArahDanaStorage.readSettings();
+        if (isMounted) {
+          setAnalysisDefaults({
+            capital: Number.isFinite(settings?.capital)
+              ? (settings?.capital ?? 10_000_000)
+              : 10_000_000,
+            riskTolerance: Number.isFinite(settings?.riskTolerance)
+              ? (settings?.riskTolerance ?? 15)
+              : 15,
+            timeHorizon: isTimeHorizon(settings?.timeHorizon)
+              ? settings.timeHorizon
+              : "medium",
+          });
+        }
+
+        if (!user) {
+          if (!isMounted) return;
+          setItems(storedItems);
+          setSyncMessage("Login untuk sinkronisasi antar perangkat.");
+          setIsHydrated(true);
+          return;
+        }
+
+        try {
+          const cloudItems = await loadCloudWatchlist(user);
+          if (!isMounted) return;
+          const nextItems = cloudItems.length > 0 ? cloudItems : storedItems;
+          setItems(nextItems);
+          localArahDanaStorage.writeWatchlist(nextItems);
+          setSyncMessage(
+            cloudItems.length > 0
+              ? "Cloud sync enabled. Watchlist dimuat dari Supabase dan dicadangkan lokal."
+              : "Cloud sync enabled. Belum ada watchlist cloud; data lokal akan dicadangkan saat berubah.",
+          );
+        } catch (error) {
+          if (!isMounted) return;
+          setItems(storedItems);
+          setSyncMessage(
+            error instanceof Error
+              ? `Cloud sync gagal, memakai localStorage. ${error.message}`
+              : "Cloud sync gagal, memakai localStorage.",
+          );
+        } finally {
+          if (isMounted) setIsHydrated(true);
+        }
+      })();
     }, 0);
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
     localArahDanaStorage.writeWatchlist(items);
-  }, [isHydrated, items]);
+    if (!user) return;
+
+    void saveCloudWatchlist(user, items)
+      .then(() => {
+        setSyncMessage("Cloud sync enabled. Watchlist tersimpan di Supabase dan localStorage.");
+      })
+      .catch((error) => {
+        setSyncMessage(
+          error instanceof Error
+            ? `Local backup tersimpan, cloud sync gagal. ${error.message}`
+            : "Local backup tersimpan, cloud sync gagal.",
+        );
+      });
+  }, [isHydrated, items, user]);
 
   function submitItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,8 +240,15 @@ export default function WatchlistPage() {
             {editingId ? "Edit item pantauan" : "Pantau instrumen"}
           </h2>
           <span className="w-fit rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
-            Contoh data diberi label
+            {user ? "Cloud sync enabled" : isConfigured ? "Local mode" : "Local mode"}
           </span>
+        </div>
+        <div className="mt-4 rounded-lg bg-stone-100 p-4 text-sm leading-6 text-stone-600">
+          <p className="font-semibold text-stone-950">Mode penyimpanan</p>
+          <p className="mt-1">
+            Mode lokal menyimpan data hanya di browser ini. Cloud sync menyimpan data ke akun Supabase agar bisa dipakai di perangkat lain.
+          </p>
+          <p className="mt-2 font-medium">{syncMessage}</p>
         </div>
         <div className="mt-4 grid gap-4">
           <Field label="Ticker / nama">
@@ -343,12 +406,12 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function readStoredWatchlist() {
   const saved = localArahDanaStorage.readWatchlist();
   if (!saved) {
-    return sampleWatchlist;
+    return [];
   }
 
   return Array.isArray(saved)
     ? saved.map(normalizeWatchlistItem)
-    : sampleWatchlist;
+    : [];
 }
 
 function createEmptyWatchlistForm(): WatchlistForm {

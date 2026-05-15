@@ -1,4 +1,4 @@
-import type { PortfolioItem, UserSettings, WatchlistItem } from "@/lib/types/investment";
+import type { PortfolioItem, SavedAnalysisResult, UserSettings, WatchlistItem } from "@/lib/types/investment";
 
 export const STORAGE_KEYS = {
   portfolio: "arahdana.portfolio",
@@ -14,6 +14,8 @@ export type ArahDanaStorageAdapter = {
   writeWatchlist(items: WatchlistItem[]): void;
   readSettings(): Partial<UserSettings> | null;
   writeSettings(settings: UserSettings): void;
+  readAnalysisResults(): SavedAnalysisResult[] | null;
+  writeAnalysisResults(items: SavedAnalysisResult[]): void;
   clearAll(defaultSettings: UserSettings): void;
 };
 
@@ -36,10 +38,17 @@ export const localArahDanaStorage: ArahDanaStorageAdapter = {
   writeSettings(settings) {
     writeJson(STORAGE_KEYS.settings, settings);
   },
+  readAnalysisResults() {
+    return readJson<SavedAnalysisResult[]>(STORAGE_KEYS.analysisResults);
+  },
+  writeAnalysisResults(items) {
+    writeJson(STORAGE_KEYS.analysisResults, items);
+  },
   clearAll(defaultSettings) {
     writeJson(STORAGE_KEYS.portfolio, []);
     writeJson(STORAGE_KEYS.watchlist, []);
     writeJson(STORAGE_KEYS.settings, defaultSettings);
+    writeJson(STORAGE_KEYS.analysisResults, []);
   },
 };
 

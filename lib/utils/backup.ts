@@ -20,7 +20,7 @@ export type ArahDanaBackupData = {
 
 export type ArahDanaBackupFile = {
   app: "ArahDana";
-  version: "0.2.0";
+  version: "0.4.0";
   exportedAt: string;
   data: ArahDanaBackupData;
 };
@@ -33,7 +33,7 @@ export type BackupActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
-const BACKUP_VERSION = "0.2.0";
+const BACKUP_VERSION = "0.4.0";
 const ARAHDANA_STORAGE_PREFIX = "arahdana.";
 
 const investmentTypes = new Set<InvestmentType>([

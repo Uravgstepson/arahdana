@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { getCurrentUser, getUserProfile, type UserProfile } from "@/lib/supabase/cloudStorage";
+import { getCurrentUser, getUserProfile, type UserProfile } from "@/lib/supabase/auth";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 type AuthContextValue = {

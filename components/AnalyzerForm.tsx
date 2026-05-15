@@ -5,6 +5,7 @@ import type {
   AnalysisResult,
   InvestmentType,
   PricePoint,
+  SavedAnalysisResult,
   TimeHorizon,
 } from "@/lib/types/investment";
 import { analyzeInvestment } from "@/lib/analysis/analyzeInvestment";
@@ -19,17 +20,21 @@ import {
   AnalyzerResult,
   AnalyzerResultSkeleton,
 } from "@/components/AnalyzerResult";
+import { useAuth } from "@/components/AuthProvider";
 import { InstrumentOptions } from "@/components/PortfolioTable";
 import {
   findMarketSuggestions,
   normalizeMarketTicker,
 } from "@/lib/market/tickerUniverse";
 import { fetchPublicMarketData } from "@/lib/providers/marketClient";
+import { localArahDanaStorage } from "@/lib/storage/localStorage";
+import { saveCloudAnalysisResult } from "@/lib/supabase/sync";
 
 type RangeOption = "1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "5y" | "max";
 type IntervalOption = "5m" | "15m" | "1d" | "1wk";
 
 export function AnalyzerForm() {
+  const { user } = useAuth();
   const [name, setName] = useState("Analisis BBCA");
   const [type, setType] = useState<InvestmentType>("stock");
   const [ticker, setTicker] = useState("BBCA:IDX");
@@ -49,6 +54,10 @@ export function AnalyzerForm() {
   const [isFetching, setIsFetching] = useState(false);
   const [apiError, setApiError] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
+  const [saveStatus, setSaveStatus] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const tickerSuggestions = useMemo(
     () => findMarketSuggestions(ticker, 6),
     [ticker],
@@ -163,6 +172,46 @@ export function AnalyzerForm() {
     setApiPrices(null);
     setMarketMeta(null);
     setApiError("");
+  }
+
+  async function saveAnalysisResult() {
+    const saved: SavedAnalysisResult = {
+      id: crypto.randomUUID(),
+      name,
+      type,
+      ticker,
+      result,
+      priceSourceLabel: priceSource.label,
+      isMockData: priceSource.isMock,
+      createdAt: new Date().toISOString(),
+    };
+
+    const existing = localArahDanaStorage.readAnalysisResults() ?? [];
+    localArahDanaStorage.writeAnalysisResults([saved, ...existing].slice(0, 50));
+
+    if (!user) {
+      setSaveStatus({
+        tone: "success",
+        message: "Hasil analisis tersimpan lokal. Login untuk sinkronisasi antar perangkat.",
+      });
+      return;
+    }
+
+    try {
+      await saveCloudAnalysisResult(user, saved);
+      setSaveStatus({
+        tone: "success",
+        message: "Hasil analisis tersimpan lokal dan tersinkron ke Supabase.",
+      });
+    } catch (error) {
+      setSaveStatus({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? `Hasil tersimpan lokal, tetapi cloud sync gagal. ${error.message}`
+            : "Hasil tersimpan lokal, tetapi cloud sync gagal.",
+      });
+    }
   }
 
   return (
@@ -366,12 +415,36 @@ export function AnalyzerForm() {
       {isFetching ? (
         <AnalyzerResultSkeleton />
       ) : (
-        <AnalyzerResult
-          result={result}
-          prices={priceSource.prices}
-          dataSourceLabel={priceSource.label}
-          isMockData={priceSource.isMock}
-        />
+        <div className="space-y-5">
+          <AnalyzerResult
+            result={result}
+            prices={priceSource.prices}
+            dataSourceLabel={priceSource.label}
+            isMockData={priceSource.isMock}
+          />
+          <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-stone-950">Simpan analisis</h2>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  Hasil disimpan ke localStorage. Jika login, hasil juga disimpan ke tabel analysis_results di Supabase.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={saveAnalysisResult}
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
+              >
+                Simpan hasil
+              </button>
+            </div>
+            {saveStatus ? (
+              <p className={`mt-3 text-sm font-medium ${saveStatus.tone === "success" ? "text-emerald-700" : "text-rose-700"}`}>
+                {saveStatus.message}
+              </p>
+            ) : null}
+          </section>
+        </div>
       )}
     </div>
   );
