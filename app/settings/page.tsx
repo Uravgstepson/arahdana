@@ -3,6 +3,7 @@
 import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { InvestmentType, TimeHorizon, UserSettings } from "@/lib/types/investment";
 import { AccountPanel } from "@/components/AccountPanel";
+import { useAuth } from "@/components/AuthProvider";
 import { InstrumentOptions } from "@/components/PortfolioTable";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
@@ -13,11 +14,13 @@ import {
   importArahDanaData,
   validateBackupData,
 } from "@/lib/utils/backup";
+import { loadCloudSettings, saveCloudSettings, syncLocalDataToCloud } from "@/lib/supabase/sync";
 import { clampNumber, formatRupiah, investmentTypeLabel, nonNegativeNumber } from "@/lib/utils/format";
 
 const defaults = DEFAULT_USER_SETTINGS;
 
 export default function SettingsPage() {
+  const { isLoading: isAuthLoading, user } = useAuth();
   const [settings, setSettings] = useState<UserSettings>(defaults);
   const [preferred, setPreferred] = useState<InvestmentType>("stock");
   const [clearStatus, setClearStatus] = useState("");
@@ -26,14 +29,58 @@ export default function SettingsPage() {
     message: string;
   } | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<{
+    tone: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
   const suppressNextSettingsWrite = useRef(false);
 
   useEffect(() => {
+    if (isAuthLoading) return;
+    let isMounted = true;
+
     window.setTimeout(() => {
-      setSettings(readStoredSettings());
-      setIsHydrated(true);
+      void (async () => {
+        const localSettings = readStoredSettings();
+        if (!user) {
+          if (!isMounted) return;
+          setSettings(localSettings);
+          setCloudSyncStatus({ tone: "info", message: "Local mode. Login untuk sinkronisasi antar perangkat." });
+          setIsHydrated(true);
+          return;
+        }
+
+        try {
+          const cloudSettings = await loadCloudSettings(user);
+          if (!isMounted) return;
+          const nextSettings = cloudSettings ?? localSettings;
+          setSettings(nextSettings);
+          localArahDanaStorage.writeSettings(nextSettings);
+          setCloudSyncStatus({
+            tone: "success",
+            message: cloudSettings
+              ? "Cloud sync enabled. Settings dimuat dari Supabase."
+              : "Cloud sync enabled. Belum ada settings cloud; data lokal akan dicadangkan saat berubah.",
+          });
+        } catch (error) {
+          if (!isMounted) return;
+          setSettings(localSettings);
+          setCloudSyncStatus({
+            tone: "error",
+            message:
+              error instanceof Error
+                ? `Cloud settings gagal dimuat, memakai localStorage. ${error.message}`
+                : "Cloud settings gagal dimuat, memakai localStorage.",
+          });
+        } finally {
+          if (isMounted) setIsHydrated(true);
+        }
+      })();
     }, 0);
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -42,7 +89,22 @@ export default function SettingsPage() {
       return;
     }
     localArahDanaStorage.writeSettings(settings);
-  }, [isHydrated, settings]);
+    if (!user) return;
+
+    void saveCloudSettings(user, settings)
+      .then(() => {
+        setCloudSyncStatus({ tone: "success", message: "Cloud sync enabled. Settings tersimpan di Supabase dan localStorage." });
+      })
+      .catch((error) => {
+        setCloudSyncStatus({
+          tone: "error",
+          message:
+            error instanceof Error
+              ? `Settings tersimpan lokal, cloud sync gagal. ${error.message}`
+              : "Settings tersimpan lokal, cloud sync gagal.",
+        });
+      });
+  }, [isHydrated, settings, user]);
 
   function addPreferred() {
     setSettings((current) =>
@@ -140,6 +202,26 @@ export default function SettingsPage() {
     }
   }
 
+  async function syncLocalToCloud() {
+    if (!user) {
+      setCloudSyncStatus({ tone: "error", message: "Login dulu untuk sinkronisasi cloud." });
+      return;
+    }
+
+    try {
+      const result = await syncLocalDataToCloud(user);
+      setCloudSyncStatus({
+        tone: "success",
+        message: `Data lokal tersinkron ke cloud: ${result.portfolioCount} holding, ${result.watchlistCount} pantauan, ${result.analysisCount} hasil analisis.`,
+      });
+    } catch (error) {
+      setCloudSyncStatus({
+        tone: "error",
+        message: `Sync Local Data to Cloud gagal. ${formatUnknownError(error)}`,
+      });
+    }
+  }
+
   return (
     <div className="grid max-w-4xl gap-5">
       <AccountPanel />
@@ -147,8 +229,21 @@ export default function SettingsPage() {
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold">Asumsi bawaan</h2>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Disimpan lokal di browser ini untuk V1 melalui adapter penyimpanan yang bisa diganti ke Supabase nanti.
+          Mode lokal menyimpan data hanya di browser ini. Cloud sync menyimpan data ke akun Supabase agar bisa dipakai di perangkat lain.
         </p>
+        {cloudSyncStatus ? (
+          <p
+            className={`mt-3 whitespace-pre-line text-sm font-medium ${
+              cloudSyncStatus.tone === "success"
+                ? "text-emerald-700"
+                : cloudSyncStatus.tone === "error"
+                  ? "text-rose-700"
+                  : "text-stone-600"
+            }`}
+          >
+            {cloudSyncStatus.message}
+          </p>
+        ) : null}
         <div className="mt-5 grid gap-4">
           <Field label={`Modal bawaan: ${formatRupiah(settings.capital)}`}>
             <input className="input" type="number" min="0" value={settings.capital} onChange={(e) => setSettings({ ...settings, capital: nonNegativeNumber(Number(e.target.value)) })} />
@@ -222,6 +317,19 @@ export default function SettingsPage() {
         <p className="mt-2 text-sm leading-6 text-stone-600">
           Data saat ini tersimpan di browser perangkat ini. Export backup secara berkala agar data tidak hilang.
         </p>
+        <div className="mt-4 rounded-lg bg-stone-100 p-4">
+          <h3 className="text-sm font-semibold text-stone-950">Cloud migration</h3>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Upload portofolio, watchlist, settings, dan hasil analisis yang ada di localStorage ke Supabase. Data cloud untuk akun ini akan dibuat ulang agar tidak dobel.
+          </p>
+          <button
+            type="button"
+            onClick={syncLocalToCloud}
+            className="mt-4 rounded-lg bg-stone-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800"
+          >
+            Sync Local Data to Cloud
+          </button>
+        </div>
         <div className="mt-4 rounded-lg bg-stone-100 p-4">
           <h3 className="text-sm font-semibold text-stone-950">File backup lokal</h3>
           <p className="mt-1 text-sm leading-6 text-stone-600">
@@ -324,4 +432,15 @@ function isInvestmentType(value: unknown): value is InvestmentType {
     value === "mixed_fund" ||
     value === "bond"
   );
+}
+
+function formatUnknownError(error: unknown) {
+  if (error instanceof Error) return error.message;
+
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+
+  return "Kesalahan tidak diketahui. Coba jalankan ulang supabase/arahdana-schema.sql di Supabase SQL Editor.";
 }

@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Disclaimer } from "@/components/Disclaimer";
+import { AuthButton } from "@/components/AuthButton";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { cn } from "@/lib/utils/format";
 
@@ -16,6 +17,7 @@ const titles: Record<string, string> = {
   "/settings": "Pengaturan",
   "/integrations": "Integrasi",
   "/profile": "Akun",
+  "/login": "Login",
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -27,7 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen text-stone-950">
       <Sidebar />
       <main className="mx-auto min-h-screen w-full max-w-7xl px-4 pb-44 pt-4 sm:px-5 lg:pb-8 lg:pl-72 lg:pr-6 lg:pt-6">
-        <div className="motion-shell mb-5 flex flex-col gap-3 rounded-[1.7rem] border border-white/40 bg-white/50 p-4 shadow-sm backdrop-blur-2xl sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="motion-shell relative z-[80] mb-5 flex overflow-visible flex-col gap-3 rounded-[1.7rem] border border-white/40 bg-white/50 p-4 shadow-sm backdrop-blur-2xl sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-emerald-700">ArahDana</p>
             <h1
@@ -44,19 +46,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => setIsHeaderExpanded((current) => !current)}
-            className="w-fit rounded-full bg-white/70 px-3 py-1.5 text-xs font-semibold text-stone-600 ring-1 ring-white/70 hover:bg-white/90"
-            aria-expanded={isHeaderExpanded}
-          >
-            {isHeaderExpanded ? "Tutup" : "Buka"}
-          </button>
+          <div className="relative z-[90] flex flex-wrap items-center gap-2">
+            <AuthButton />
+            <button
+              type="button"
+              onClick={() => setIsHeaderExpanded((current) => !current)}
+              className="w-fit rounded-full bg-white/70 px-3 py-1.5 text-xs font-semibold text-stone-600 ring-1 ring-white/70 hover:bg-white/90"
+              aria-expanded={isHeaderExpanded}
+            >
+              {isHeaderExpanded ? "Tutup" : "Buka"}
+            </button>
+          </div>
         </div>
-        <div className="motion-shell motion-delay-1">
+        <div className="motion-shell motion-delay-1 relative z-10">
           <Disclaimer />
         </div>
-        <div key={pathname} className="page-flow mt-5">
+        <div key={pathname} className="page-flow relative z-0 mt-5">
           {children}
         </div>
         <footer className="mt-8 text-center text-[0.68rem] font-medium tracking-[0.08em] text-stone-400 lg:hidden">

@@ -85,6 +85,17 @@ export type AnalysisResult = {
   explanation: string;
 };
 
+export type SavedAnalysisResult = {
+  id: string;
+  name: string;
+  type: InvestmentType;
+  ticker?: string;
+  result: AnalysisResult;
+  priceSourceLabel: string;
+  isMockData: boolean;
+  createdAt: string;
+};
+
 export type PortfolioItem = {
   id: string;
   name: string;
