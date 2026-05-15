@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   portfolio: "arahdana.portfolio",
   watchlist: "arahdana.watchlist",
   settings: "arahdana.settings",
+  analysisResults: "arahdana.analysisResults",
 } as const;
 
 export type ArahDanaStorageAdapter = {

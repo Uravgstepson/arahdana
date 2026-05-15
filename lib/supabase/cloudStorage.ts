@@ -1,5 +1,5 @@
 import type { User } from "@supabase/supabase-js";
-import type { ArahDanaBackup } from "@/lib/storage/backup";
+import type { ArahDanaBackupData } from "@/lib/utils/backup";
 import type { PortfolioItem, UserSettings, WatchlistItem } from "@/lib/types/investment";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -77,7 +77,7 @@ export async function upsertUserProfile(user: User, displayName: string) {
   return data as UserProfile;
 }
 
-export async function saveBackupOnline(user: User, backup: ArahDanaBackup) {
+export async function saveBackupOnline(user: User, backup: ArahDanaBackupData) {
   const supabase = requireSupabase();
   const { data, error } = await supabase
     .from("arahdana_user_data")

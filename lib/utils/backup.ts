@@ -1,3 +1,5 @@
+import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
+import { STORAGE_KEYS } from "@/lib/storage/localStorage";
 import type {
   DataSource,
   InvestmentType,
@@ -7,21 +9,32 @@ import type {
   UserSettings,
   WatchlistItem,
 } from "@/lib/types/investment";
-import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { clampNumber, nonNegativeNumber } from "@/lib/utils/format";
 
-export type ArahDanaBackup = {
-  app: "ArahDana";
-  version: string;
-  exportedAt: string;
+export type ArahDanaBackupData = {
   portfolio: PortfolioItem[];
   watchlist: WatchlistItem[];
   settings: UserSettings;
+  analysisResults: unknown[];
 };
 
-export type BackupValidationResult =
-  | { ok: true; backup: ArahDanaBackup }
+export type ArahDanaBackupFile = {
+  app: "ArahDana";
+  version: "0.2.0";
+  exportedAt: string;
+  data: ArahDanaBackupData;
+};
+
+export type BackupDataResult =
+  | { ok: true; message: string; data: ArahDanaBackupData }
   | { ok: false; message: string };
+
+export type BackupActionResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+const BACKUP_VERSION = "0.2.0";
+const ARAHDANA_STORAGE_PREFIX = "arahdana.";
 
 const investmentTypes = new Set<InvestmentType>([
   "stock",
@@ -50,78 +63,146 @@ const dataSources = new Set<DataSource>([
   "mock_data",
 ]);
 
-export function createBackup(
-  portfolio: PortfolioItem[] | null,
-  watchlist: WatchlistItem[] | null,
-  settings: Partial<UserSettings> | null,
-  defaultSettings: UserSettings,
-): ArahDanaBackup {
-  return {
+export function exportArahDanaData(): BackupDataResult {
+  if (!canUseLocalStorage()) {
+    return { ok: false, message: "Backup hanya bisa dibuat di browser." };
+  }
+
+  const backup: ArahDanaBackupFile = {
     app: "ArahDana",
-    version: APP_VERSION_LABEL,
+    version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    portfolio: Array.isArray(portfolio) ? portfolio : [],
-    watchlist: Array.isArray(watchlist) ? watchlist : [],
-    settings: normalizeSettings(settings, defaultSettings),
+    data: collectArahDanaData(),
+  };
+
+  const filename = `arahdana-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {
+    type: "application/json",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.URL.revokeObjectURL(url);
+
+  return { ok: true, message: "Backup berhasil dibuat dan diunduh.", data: backup.data };
+}
+
+export function collectArahDanaData(): ArahDanaBackupData {
+  return {
+    portfolio: readArray<PortfolioItem>(STORAGE_KEYS.portfolio),
+    watchlist: readArray<WatchlistItem>(STORAGE_KEYS.watchlist),
+    settings: normalizeSettings(readObject(STORAGE_KEYS.settings)),
+    analysisResults: readArray<unknown>(STORAGE_KEYS.analysisResults),
   };
 }
 
-export function validateBackupJson(
-  jsonText: string,
-  defaultSettings: UserSettings,
-): BackupValidationResult {
+export async function importArahDanaData(file: File): Promise<BackupDataResult> {
+  if (!canUseLocalStorage()) {
+    return { ok: false, message: "Backup hanya bisa diimpor di browser." };
+  }
+
   let parsed: unknown;
 
   try {
-    parsed = JSON.parse(jsonText);
+    parsed = JSON.parse(await file.text());
   } catch {
     return { ok: false, message: "File backup bukan JSON yang valid." };
   }
 
-  if (!isRecord(parsed)) {
-    return { ok: false, message: "Format backup tidak dikenali." };
-  }
+  const validation = validateBackupData(parsed);
+  if (!validation.ok) return validation;
 
-  if (!Array.isArray(parsed.portfolio)) {
-    return { ok: false, message: "Backup harus berisi daftar portfolio." };
-  }
-
-  if (!Array.isArray(parsed.watchlist)) {
-    return { ok: false, message: "Backup harus berisi daftar watchlist." };
-  }
-
-  if (!isRecord(parsed.settings)) {
-    return { ok: false, message: "Backup harus berisi settings." };
-  }
-
-  const portfolio = validatePortfolio(parsed.portfolio);
-  if (!portfolio.ok) return portfolio;
-
-  const watchlist = validateWatchlist(parsed.watchlist);
-  if (!watchlist.ok) return watchlist;
-
-  const settings = validateSettings(parsed.settings, defaultSettings);
-  if (!settings.ok) return settings;
+  writeJson(STORAGE_KEYS.portfolio, validation.data.portfolio);
+  writeJson(STORAGE_KEYS.watchlist, validation.data.watchlist);
+  writeJson(STORAGE_KEYS.settings, validation.data.settings);
+  writeJson(STORAGE_KEYS.analysisResults, validation.data.analysisResults);
+  notifyLocalDataUpdated();
 
   return {
     ok: true,
-    backup: {
-      app: "ArahDana",
-      version: typeof parsed.version === "string" ? parsed.version : "unknown",
-      exportedAt: typeof parsed.exportedAt === "string" ? parsed.exportedAt : new Date().toISOString(),
+    message: `Backup berhasil dipulihkan: ${validation.data.portfolio.length} portofolio, ${validation.data.watchlist.length} pantauan, dan pengaturan.`,
+    data: validation.data,
+  };
+}
+
+export function validateBackupData(data: unknown): BackupDataResult {
+  if (!isRecord(data)) {
+    return { ok: false, message: "Format backup tidak dikenali." };
+  }
+
+  if (data.app !== "ArahDana") {
+    return { ok: false, message: "File ini bukan backup ArahDana." };
+  }
+
+  if (!isRecord(data.data)) {
+    return { ok: false, message: "Backup tidak memiliki bagian data yang valid." };
+  }
+
+  const portfolio = validatePortfolio(
+    data.data.portfolio === undefined ? [] : data.data.portfolio,
+  );
+  if (!portfolio.ok) return portfolio;
+
+  const watchlist = validateWatchlist(
+    data.data.watchlist === undefined ? [] : data.data.watchlist,
+  );
+  if (!watchlist.ok) return watchlist;
+
+  const settings = validateSettings(
+    data.data.settings === undefined ? {} : data.data.settings,
+  );
+  if (!settings.ok) return settings;
+
+  const analysisResults = validateAnalysisResults(data.data.analysisResults);
+  if (!analysisResults.ok) return analysisResults;
+
+  return {
+    ok: true,
+    message: "Backup valid.",
+    data: {
       portfolio: portfolio.items,
       watchlist: watchlist.items,
       settings: settings.settings,
+      analysisResults: analysisResults.items,
     },
   };
 }
 
-function validatePortfolio(
-  items: unknown[],
-): { ok: true; items: PortfolioItem[] } | { ok: false; message: string } {
-  const validItems: PortfolioItem[] = [];
+export function clearArahDanaData(): BackupActionResult {
+  if (!canUseLocalStorage()) {
+    return { ok: false, message: "Data lokal hanya bisa dihapus di browser." };
+  }
 
-  for (const [index, item] of items.entries()) {
+  const keysToRemove: string[] = [];
+
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith(ARAHDANA_STORAGE_PREFIX)) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+  notifyLocalDataUpdated();
+
+  return {
+    ok: true,
+    message: "Semua data lokal ArahDana berhasil dihapus dari browser ini.",
+  };
+}
+
+function validatePortfolio(
+  value: unknown,
+): { ok: true; items: PortfolioItem[] } | { ok: false; message: string } {
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data portofolio di backup tidak valid." };
+  }
+
+  const items: PortfolioItem[] = [];
+
+  for (const [index, item] of value.entries()) {
     if (!isRecord(item)) {
       return { ok: false, message: `Portfolio item #${index + 1} tidak valid.` };
     }
@@ -162,7 +243,7 @@ function validatePortfolio(
       return { ok: false, message: `Portfolio item #${index + 1} memiliki waktu update tidak valid.` };
     }
 
-    validItems.push({
+    items.push({
       id: item.id,
       name: item.name,
       type: item.type,
@@ -178,15 +259,19 @@ function validatePortfolio(
     });
   }
 
-  return { ok: true, items: validItems };
+  return { ok: true, items };
 }
 
 function validateWatchlist(
-  items: unknown[],
+  value: unknown,
 ): { ok: true; items: WatchlistItem[] } | { ok: false; message: string } {
-  const validItems: WatchlistItem[] = [];
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data watchlist di backup tidak valid." };
+  }
 
-  for (const [index, item] of items.entries()) {
+  const items: WatchlistItem[] = [];
+
+  for (const [index, item] of value.entries()) {
     if (!isRecord(item)) {
       return { ok: false, message: `Watchlist item #${index + 1} tidak valid.` };
     }
@@ -215,7 +300,7 @@ function validateWatchlist(
       return { ok: false, message: `Watchlist item #${index + 1} memiliki waktu analisis tidak valid.` };
     }
 
-    validItems.push({
+    items.push({
       id: item.id,
       name: item.name,
       type: item.type,
@@ -227,77 +312,112 @@ function validateWatchlist(
     });
   }
 
-  return { ok: true, items: validItems };
+  return { ok: true, items };
 }
 
 function validateSettings(
-  settings: Record<string, unknown>,
-  defaultSettings: UserSettings,
+  value: unknown,
 ): { ok: true; settings: UserSettings } | { ok: false; message: string } {
-  if (
-    settings.capital !== undefined &&
-    !isNonNegativeNumber(settings.capital)
-  ) {
-    return { ok: false, message: "Settings capital tidak valid." };
+  if (!isRecord(value)) {
+    return { ok: false, message: "Data settings di backup tidak valid." };
+  }
+
+  if (value.capital !== undefined && !isNonNegativeNumber(value.capital)) {
+    return { ok: false, message: "Settings modal tidak valid." };
   }
 
   if (
-    settings.riskTolerance !== undefined &&
-    !isNonNegativeNumber(settings.riskTolerance)
+    value.riskTolerance !== undefined &&
+    !isNonNegativeNumber(value.riskTolerance)
   ) {
     return { ok: false, message: "Settings toleransi risiko tidak valid." };
   }
 
-  if (
-    settings.timeHorizon !== undefined &&
-    !isTimeHorizon(settings.timeHorizon)
-  ) {
+  if (value.timeHorizon !== undefined && !isTimeHorizon(value.timeHorizon)) {
     return { ok: false, message: "Settings jangka waktu tidak valid." };
   }
 
   if (
-    settings.preferredInstruments !== undefined &&
-    (!Array.isArray(settings.preferredInstruments) ||
-      !settings.preferredInstruments.every(isInvestmentType))
+    value.preferredInstruments !== undefined &&
+    (!Array.isArray(value.preferredInstruments) ||
+      !value.preferredInstruments.every(isInvestmentType))
   ) {
     return { ok: false, message: "Settings instrumen pilihan tidak valid." };
   }
 
   if (
-    settings.aprMoneyMarketFund !== undefined &&
-    !isNonNegativeNumber(settings.aprMoneyMarketFund)
+    value.aprMoneyMarketFund !== undefined &&
+    !isNonNegativeNumber(value.aprMoneyMarketFund)
   ) {
     return { ok: false, message: "Settings APR RDPU tidak valid." };
   }
 
-  return { ok: true, settings: normalizeSettings(settings, defaultSettings) };
+  return { ok: true, settings: normalizeSettings(value) };
 }
 
-function normalizeSettings(
-  settings: Partial<UserSettings> | null,
-  defaultSettings: UserSettings,
-): UserSettings {
+function validateAnalysisResults(
+  value: unknown,
+): { ok: true; items: unknown[] } | { ok: false; message: string } {
+  if (value === undefined) return { ok: true, items: [] };
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data analysis results di backup tidak valid." };
+  }
+  return { ok: true, items: value };
+}
+
+function normalizeSettings(settings: Partial<UserSettings> | null): UserSettings {
   const preferredInstruments = Array.isArray(settings?.preferredInstruments)
     ? settings.preferredInstruments.filter(isInvestmentType)
-    : defaultSettings.preferredInstruments;
+    : DEFAULT_USER_SETTINGS.preferredInstruments;
 
   return {
-    ...defaultSettings,
+    ...DEFAULT_USER_SETTINGS,
     ...settings,
-    capital: nonNegativeNumber(settings?.capital ?? defaultSettings.capital),
+    capital: nonNegativeNumber(settings?.capital ?? DEFAULT_USER_SETTINGS.capital),
     riskTolerance: clampNumber(
-      settings?.riskTolerance ?? defaultSettings.riskTolerance,
+      settings?.riskTolerance ?? DEFAULT_USER_SETTINGS.riskTolerance,
       5,
       30,
     ),
     timeHorizon: isTimeHorizon(settings?.timeHorizon)
       ? settings.timeHorizon
-      : defaultSettings.timeHorizon,
+      : DEFAULT_USER_SETTINGS.timeHorizon,
     preferredInstruments,
     aprMoneyMarketFund: isNonNegativeNumber(settings?.aprMoneyMarketFund)
       ? settings.aprMoneyMarketFund
-      : defaultSettings.aprMoneyMarketFund,
+      : DEFAULT_USER_SETTINGS.aprMoneyMarketFund,
   };
+}
+
+function readArray<T>(key: string): T[] {
+  const value = readJson(key);
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function readObject(key: string): Record<string, unknown> | null {
+  const value = readJson(key);
+  return isRecord(value) ? value : null;
+}
+
+function readJson(key: string): unknown {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson<T>(key: string, value: T) {
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function notifyLocalDataUpdated() {
+  window.dispatchEvent(new Event("arahdana:local-data-updated"));
+}
+
+function canUseLocalStorage() {
+  return typeof window !== "undefined" && Boolean(window.localStorage);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

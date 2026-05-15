@@ -1,13 +1,18 @@
 "use client";
 
-import { type ChangeEvent, type ReactNode, useEffect, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { InvestmentType, TimeHorizon, UserSettings } from "@/lib/types/investment";
 import { AccountPanel } from "@/components/AccountPanel";
 import { InstrumentOptions } from "@/components/PortfolioTable";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
-import { createBackup, validateBackupJson } from "@/lib/storage/backup";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
+import {
+  clearArahDanaData,
+  exportArahDanaData,
+  importArahDanaData,
+  validateBackupData,
+} from "@/lib/utils/backup";
 import { clampNumber, formatRupiah, investmentTypeLabel, nonNegativeNumber } from "@/lib/utils/format";
 
 const defaults = DEFAULT_USER_SETTINGS;
@@ -21,6 +26,7 @@ export default function SettingsPage() {
     message: string;
   } | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const suppressNextSettingsWrite = useRef(false);
 
   useEffect(() => {
     window.setTimeout(() => {
@@ -31,6 +37,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!isHydrated) return;
+    if (suppressNextSettingsWrite.current) {
+      suppressNextSettingsWrite.current = false;
+      return;
+    }
     localArahDanaStorage.writeSettings(settings);
   }, [isHydrated, settings]);
 
@@ -55,38 +65,24 @@ export default function SettingsPage() {
 
   function clearAllData() {
     const confirmed = window.confirm(
-      "Hapus semua data lokal ArahDana dari browser ini? Ini akan menghapus kepemilikan portofolio, item pantauan, dan mengatur ulang pengaturan.",
+      "Hapus semua data lokal ArahDana dari browser ini? Data browser lain tidak akan disentuh.",
     );
     if (!confirmed) return;
 
-    localArahDanaStorage.clearAll(defaults);
+    const result = clearArahDanaData();
+    suppressNextSettingsWrite.current = true;
     setSettings(defaults);
     setPreferred("stock");
-    setClearStatus("Data portofolio, pantauan, dan pengaturan lokal sudah dihapus.");
     setBackupStatus(null);
+    setClearStatus(result.message);
   }
 
   function exportBackup() {
-    const backup = createBackup(
-      localArahDanaStorage.readPortfolio(),
-      localArahDanaStorage.readWatchlist(),
-      localArahDanaStorage.readSettings(),
-      defaults,
-    );
-    const filename = `arahdana-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    const blob = new Blob([JSON.stringify(backup, null, 2)], {
-      type: "application/json",
-    });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    const result = exportArahDanaData();
     setClearStatus("");
     setBackupStatus({
-      tone: "success",
-      message: "Backup JSON berhasil dibuat.",
+      tone: result.ok ? "success" : "error",
+      message: result.message,
     });
   }
 
@@ -95,23 +91,45 @@ export default function SettingsPage() {
     event.target.value = "";
     if (!file) return;
 
+    let parsedBackup: unknown;
+
     try {
-      const validation = validateBackupJson(await file.text(), defaults);
-      if (!validation.ok) {
+      parsedBackup = JSON.parse(await file.text());
+    } catch {
+      setClearStatus("");
+      setBackupStatus({
+        tone: "error",
+        message: "File backup bukan JSON yang valid.",
+      });
+      return;
+    }
+
+    const validation = validateBackupData(parsedBackup);
+    if (!validation.ok) {
+      setClearStatus("");
+      setBackupStatus({ tone: "error", message: validation.message });
+      return;
+    }
+
+    try {
+      const confirmed = window.confirm(
+        "Import backup akan mengganti data ArahDana lokal di browser ini. Lanjutkan?",
+      );
+      if (!confirmed) return;
+
+      const result = await importArahDanaData(file);
+      if (!result.ok) {
         setClearStatus("");
-        setBackupStatus({ tone: "error", message: validation.message });
+        setBackupStatus({ tone: "error", message: result.message });
         return;
       }
 
-      localArahDanaStorage.writePortfolio(validation.backup.portfolio);
-      localArahDanaStorage.writeWatchlist(validation.backup.watchlist);
-      localArahDanaStorage.writeSettings(validation.backup.settings);
-      setSettings(validation.backup.settings);
+      setSettings(result.data?.settings ?? defaults);
       setPreferred("stock");
       setClearStatus("");
       setBackupStatus({
         tone: "success",
-        message: `Backup berhasil diimpor: ${validation.backup.portfolio.length} portofolio, ${validation.backup.watchlist.length} pantauan, dan settings dipulihkan.`,
+        message: result.message,
       });
     } catch {
       setClearStatus("");
@@ -199,15 +217,15 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-rose-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-stone-950">Kontrol data lokal</h2>
+      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-stone-950">Backup & Restore</h2>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          ArahDana V1 hanya menyimpan data portofolio, pantauan, dan pengaturan di browser ini. Kredensial bank, e-wallet, atau Bibit tidak disimpan.
+          Data saat ini tersimpan di browser perangkat ini. Export backup secara berkala agar data tidak hilang.
         </p>
         <div className="mt-4 rounded-lg bg-stone-100 p-4">
-          <h3 className="text-sm font-semibold text-stone-950">Backup data lokal</h3>
+          <h3 className="text-sm font-semibold text-stone-950">File backup lokal</h3>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            Ekspor atau impor portofolio, pantauan, dan pengaturan sebagai file JSON.
+            Backup mencakup portofolio, watchlist, pengaturan, dan hasil analisis tersimpan jika tersedia.
           </p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <button
@@ -215,10 +233,10 @@ export default function SettingsPage() {
               onClick={exportBackup}
               className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
             >
-              Ekspor JSON
+              Export Data
             </button>
             <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-stone-700 ring-1 ring-stone-200 hover:bg-stone-50">
-              Impor JSON
+              Import Backup
               <input
                 className="sr-only"
                 type="file"
@@ -237,13 +255,19 @@ export default function SettingsPage() {
             </p>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={clearAllData}
-          className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-800"
-        >
-          Hapus semua data lokal
-        </button>
+        <div className="mt-4 rounded-lg border border-rose-200 bg-white/70 p-4">
+          <h3 className="text-sm font-semibold text-rose-800">Danger zone</h3>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Hapus hanya data ArahDana dari browser ini. Data situs lain tidak akan disentuh.
+          </p>
+          <button
+            type="button"
+            onClick={clearAllData}
+            className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-800"
+          >
+            Clear All Local Data
+          </button>
+        </div>
         {clearStatus ? <p className="mt-3 text-sm font-medium text-emerald-700">{clearStatus}</p> : null}
       </section>
       <p className="px-2 text-xs font-medium text-stone-400">{APP_VERSION_LABEL}</p>

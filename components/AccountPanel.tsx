@@ -1,10 +1,9 @@
 "use client";
 
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { createBackup, validateBackupJson } from "@/lib/storage/backup";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { useAuth } from "@/components/AuthProvider";
-import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
+import { collectArahDanaData, validateBackupData, type ArahDanaBackupFile } from "@/lib/utils/backup";
 import {
   loadBackupOnline,
   saveBackupOnline,
@@ -101,17 +100,28 @@ export function AccountPanel() {
     if (!user) return;
 
     await runTask(async () => {
-      const backup = createBackup(
-        localArahDanaStorage.readPortfolio(),
-        localArahDanaStorage.readWatchlist(),
-        localArahDanaStorage.readSettings(),
-        DEFAULT_USER_SETTINGS,
-      );
-      const result = await saveBackupOnline(user, backup);
+      const backup: ArahDanaBackupFile = {
+        app: "ArahDana",
+        version: "0.2.0",
+        exportedAt: new Date().toISOString(),
+        data: collectArahDanaData(),
+      };
+      const validation = validateBackupData(backup);
+      if (!validation.ok) {
+        setStatus({ tone: "error", message: validation.message });
+        return;
+      }
+      const backupData = validation.data;
+      if (!backupData) {
+        setStatus({ tone: "error", message: "Data backup lokal tidak lengkap." });
+        return;
+      }
+
+      const result = await saveBackupOnline(user, backupData);
       setLastSync({ userId: user.id, updatedAt: result.updated_at });
       setStatus({
         tone: "success",
-        message: `Data lokal disimpan ke cloud: ${backup.portfolio.length} portofolio dan ${backup.watchlist.length} pantauan.`,
+        message: `Data lokal disimpan ke cloud: ${backupData.portfolio.length} portofolio dan ${backupData.watchlist.length} pantauan.`,
       });
     });
   }
@@ -129,31 +139,36 @@ export function AccountPanel() {
         return;
       }
 
-      const validation = validateBackupJson(
-        JSON.stringify({
+      const validation = validateBackupData({
           app: "ArahDana",
-          version: "cloud",
+          version: "0.2.0",
           exportedAt: cloudData.updated_at ?? new Date().toISOString(),
-          portfolio: cloudData.portfolio,
-          watchlist: cloudData.watchlist,
-          settings: cloudData.settings,
-        }),
-        DEFAULT_USER_SETTINGS,
-      );
+          data: {
+            portfolio: cloudData.portfolio,
+            watchlist: cloudData.watchlist,
+            settings: cloudData.settings,
+            analysisResults: [],
+          },
+        });
 
       if (!validation.ok) {
         setStatus({ tone: "error", message: validation.message });
         return;
       }
+      const backupData = validation.data;
+      if (!backupData) {
+        setStatus({ tone: "error", message: "Data backup cloud tidak lengkap." });
+        return;
+      }
 
-      localArahDanaStorage.writePortfolio(validation.backup.portfolio);
-      localArahDanaStorage.writeWatchlist(validation.backup.watchlist);
-      localArahDanaStorage.writeSettings(validation.backup.settings);
+      localArahDanaStorage.writePortfolio(backupData.portfolio);
+      localArahDanaStorage.writeWatchlist(backupData.watchlist);
+      localArahDanaStorage.writeSettings(backupData.settings);
       setLastSync({ userId: user.id, updatedAt: cloudData.updated_at });
       window.dispatchEvent(new Event("arahdana:local-data-updated"));
       setStatus({
         tone: "success",
-        message: `Data cloud berhasil dipulihkan ke perangkat ini: ${validation.backup.portfolio.length} portofolio dan ${validation.backup.watchlist.length} pantauan.`,
+        message: `Data cloud berhasil dipulihkan ke perangkat ini: ${backupData.portfolio.length} portofolio dan ${backupData.watchlist.length} pantauan.`,
       });
     });
   }
