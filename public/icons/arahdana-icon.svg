@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">ArahDana</title>
+  <desc id="desc">Ikon placeholder ArahDana</desc>
+  <rect width="512" height="512" rx="108" fill="#047857"/>
+  <path d="M120 354 209 138h94l89 216h-73l-15-44h-99l-15 44h-70Z" fill="#f7f8f5"/>
+  <path d="M224 252h61l-30-88-31 88Z" fill="#047857"/>
+  <path d="M153 384h206" stroke="#d9f99d" stroke-width="24" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,58 @@
+{
+  "name": "ArahDana",
+  "short_name": "ArahDana",
+  "description": "Dasbor pendukung keputusan investasi Indonesia",
+  "id": "/",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait-primary",
+  "background_color": "#edf3f7",
+  "theme_color": "#edf3f7",
+  "categories": ["finance", "productivity"],
+  "lang": "id",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icons/arahdana-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/arahdana-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/arahdana-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/arahdana-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Portofolio",
+      "short_name": "Portofolio",
+      "description": "Buka halaman portofolio",
+      "url": "/portfolio",
+      "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Analisis",
+      "short_name": "Analisis",
+      "description": "Buka halaman analisis investasi",
+      "url": "/analyzer",
+      "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

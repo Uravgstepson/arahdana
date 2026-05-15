@@ -1,0 +1,485 @@
+"use client";
+
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import type {
+  AnalysisResult,
+  DataSource,
+  InvestmentType,
+  TimeHorizon,
+  WatchlistItem,
+} from "@/lib/types/investment";
+import { analyzeInvestment } from "@/lib/analysis/analyzeInvestment";
+import { localArahDanaStorage } from "@/lib/storage/localStorage";
+import {
+  dataSourceLabel,
+  fetchPublicMarketData,
+} from "@/lib/providers/marketClient";
+import { sampleWatchlist } from "@/lib/utils/sampleData";
+import { InstrumentOptions } from "@/components/PortfolioTable";
+import { InstrumentBadge } from "@/components/InstrumentBadge";
+
+type WatchlistForm = Omit<WatchlistItem, "id">;
+type WatchlistAnalysisState = Record<
+  string,
+  {
+    isLoading?: boolean;
+    error?: string;
+    result?: AnalysisResult;
+  }
+>;
+
+export default function WatchlistPage() {
+  const [items, setItems] = useState<WatchlistItem[]>(sampleWatchlist);
+  const [form, setForm] = useState<WatchlistForm>(() =>
+    createEmptyWatchlistForm(),
+  );
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [analysisById, setAnalysisById] = useState<WatchlistAnalysisState>({});
+  const [analysisDefaults, setAnalysisDefaults] = useState({
+    capital: 10_000_000,
+    riskTolerance: 15,
+    timeHorizon: "medium" as TimeHorizon,
+  });
+
+  useEffect(() => {
+    window.setTimeout(() => {
+      setItems(readStoredWatchlist());
+      const settings = localArahDanaStorage.readSettings();
+      setAnalysisDefaults({
+        capital: Number.isFinite(settings?.capital)
+          ? (settings?.capital ?? 10_000_000)
+          : 10_000_000,
+        riskTolerance: Number.isFinite(settings?.riskTolerance)
+          ? (settings?.riskTolerance ?? 15)
+          : 15,
+        timeHorizon: isTimeHorizon(settings?.timeHorizon)
+          ? settings.timeHorizon
+          : "medium",
+      });
+      setIsHydrated(true);
+    }, 0);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    localArahDanaStorage.writeWatchlist(items);
+  }, [isHydrated, items]);
+
+  function submitItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form.name || !form.targetBuyZone) return;
+
+    const normalized = normalizeWatchlistItem({
+      ...form,
+      dataSource: "manual_input",
+      lastAnalyzedAt: undefined,
+      id: editingId ?? crypto.randomUUID(),
+    });
+
+    setItems((current) =>
+      editingId
+        ? current.map((item) => (item.id === editingId ? normalized : item))
+        : [normalized, ...current],
+    );
+    if (editingId) {
+      setAnalysisById((current) => {
+        const next = { ...current };
+        delete next[editingId];
+        return next;
+      });
+    }
+    setEditingId(null);
+    setForm(createEmptyWatchlistForm());
+  }
+
+  function startEditing(item: WatchlistItem) {
+    setEditingId(item.id);
+    setForm({
+      name: item.name,
+      type: item.type,
+      targetBuyZone: item.targetBuyZone,
+      notes: item.notes ?? "",
+      status: item.status,
+      dataSource: item.dataSource,
+      lastAnalyzedAt: item.lastAnalyzedAt,
+    });
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setForm(createEmptyWatchlistForm());
+  }
+
+  function deleteItem(id: string) {
+    setItems((current) => current.filter((item) => item.id !== id));
+    setAnalysisById((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    if (editingId === id) {
+      cancelEditing();
+    }
+  }
+
+  async function analyzeItem(item: WatchlistItem) {
+    const ticker = item.name.trim().toUpperCase();
+    if (!ticker) return;
+
+    setAnalysisById((current) => ({
+      ...current,
+      [item.id]: { isLoading: true },
+    }));
+
+    try {
+      const marketData = await fetchPublicMarketData({
+        ticker,
+        range: "1y",
+        interval: "1d",
+      });
+      const result = analyzeInvestment({
+        name: item.name,
+        type: item.type,
+        ticker,
+        capital: analysisDefaults.capital,
+        riskTolerance: analysisDefaults.riskTolerance,
+        timeHorizon: analysisDefaults.timeHorizon,
+        prices: marketData.prices,
+      });
+
+      setAnalysisById((current) => ({
+        ...current,
+        [item.id]: { result },
+      }));
+      setItems((current) =>
+        current.map((currentItem) =>
+          currentItem.id === item.id
+            ? {
+                ...currentItem,
+                dataSource: "live_public_market_data",
+                lastAnalyzedAt: new Date().toISOString(),
+              }
+            : currentItem,
+        ),
+      );
+    } catch (error) {
+      setAnalysisById((current) => ({
+        ...current,
+        [item.id]: {
+          error: `${error instanceof Error ? error.message : "Analisis gagal."} Data tidak bisa diperbarui; data pantauan manual/contoh sebelumnya tetap dipakai.`,
+        },
+      }));
+    }
+  }
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
+      <form
+        onSubmit={submitItem}
+        className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold">
+            {editingId ? "Edit item pantauan" : "Pantau instrumen"}
+          </h2>
+          <span className="w-fit rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+            Contoh data diberi label
+          </span>
+        </div>
+        <div className="mt-4 grid gap-4">
+          <Field label="Ticker / nama">
+            <input
+              className="input"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="BBRI.JK"
+            />
+          </Field>
+          <Field label="Jenis">
+            <select
+              className="input"
+              value={form.type}
+              onChange={(e) =>
+                setForm({ ...form, type: e.target.value as InvestmentType })
+              }
+            >
+              <InstrumentOptions />
+            </select>
+          </Field>
+          <Field label="Zona beli target">
+            <input
+              className="input"
+              value={form.targetBuyZone}
+              onChange={(e) =>
+                setForm({ ...form, targetBuyZone: e.target.value })
+              }
+            />
+          </Field>
+          <Field label="Status">
+            <select
+              className="input"
+              value={form.status}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  status: e.target.value as WatchlistItem["status"],
+                })
+              }
+            >
+              <option value="watching">Dipantau</option>
+              <option value="waiting">Menunggu</option>
+              <option value="avoid">Hindari</option>
+              <option value="bought">Sudah dibeli</option>
+            </select>
+          </Field>
+          <Field label="Catatan">
+            <textarea
+              className="input min-h-24"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </Field>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800">
+            {editingId ? "Simpan perubahan" : "Tambah ke pantauan"}
+          </button>
+          {editingId ? (
+            <button
+              type="button"
+              onClick={cancelEditing}
+              className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
+            >
+              Batal edit
+            </button>
+          ) : null}
+        </div>
+      </form>
+
+      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold">Pantauan</h2>
+        <div className="mt-4 grid gap-3">
+          {items.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+              Belum ada item pantauan tersimpan. Tambahkan ticker, reksadana,
+              atau zona target obligasi untuk mulai memantau.
+            </div>
+          ) : null}
+          {items.map((item) => (
+            <article
+              key={item.id}
+              className="rounded-lg border border-stone-200 p-4"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="font-semibold text-stone-950">{item.name}</h3>
+                  <div className="mt-1">
+                    <InstrumentBadge type={item.type} className="text-[10px]" />
+                  </div>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">
+                    Sumber: {dataSourceLabel(item.dataSource)}
+                    {item.lastAnalyzedAt
+                      ? `, dianalisis ${formatDateTime(item.lastAnalyzedAt)}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-fit rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold uppercase text-stone-700">
+                    {watchlistStatusLabel(item.status)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => analyzeItem(item)}
+                    disabled={analysisById[item.id]?.isLoading}
+                    className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {analysisById[item.id]?.isLoading
+                      ? "Menganalisis..."
+                      : "Analisis"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startEditing(item)}
+                    className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteItem(item.id)}
+                    className="rounded-md border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </div>
+              <p className="mt-3 text-sm font-medium text-emerald-700">
+                Target: {item.targetBuyZone}
+              </p>
+              {item.notes ? (
+                <p className="mt-2 text-sm leading-6 text-stone-600">
+                  {item.notes}
+                </p>
+              ) : null}
+              <WatchlistAnalysisPanel state={analysisById[item.id]} />
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="grid gap-1 text-sm font-medium text-stone-700">
+      {label}
+      {children}
+    </label>
+  );
+}
+
+function readStoredWatchlist() {
+  const saved = localArahDanaStorage.readWatchlist();
+  if (!saved) {
+    return sampleWatchlist;
+  }
+
+  return Array.isArray(saved)
+    ? saved.map(normalizeWatchlistItem)
+    : sampleWatchlist;
+}
+
+function createEmptyWatchlistForm(): WatchlistForm {
+  return {
+    name: "",
+    type: "stock",
+    targetBuyZone: "",
+    notes: "",
+    status: "watching",
+    dataSource: "manual_input",
+  };
+}
+
+function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
+  return {
+    ...item,
+    id: item.id || crypto.randomUUID(),
+    notes: item.notes ?? "",
+    status: isWatchlistStatus(item.status) ? item.status : "watching",
+    dataSource: isDataSource(item.dataSource)
+      ? item.dataSource
+      : "manual_input",
+    lastAnalyzedAt: item.lastAnalyzedAt,
+  };
+}
+
+function isWatchlistStatus(value: string): value is WatchlistItem["status"] {
+  return ["watching", "waiting", "avoid", "bought"].includes(value);
+}
+
+function WatchlistAnalysisPanel({
+  state,
+}: {
+  state?: WatchlistAnalysisState[string];
+}) {
+  if (!state) return null;
+
+  if (state.isLoading) {
+    return (
+      <div className="mt-4 rounded-lg bg-stone-100 p-4 text-sm text-stone-600">
+        Mengambil data pasar publik langsung dan menjalankan analisis
+        deterministik...
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <div className="mt-4 rounded-lg bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800 ring-1 ring-rose-100">
+        {state.error}
+      </div>
+    );
+  }
+
+  if (!state.result) return null;
+
+  const warning =
+    state.result.doNotBuyWarnings[0] ??
+    "Tidak ada peringatan besar dari data historis.";
+
+  return (
+    <div className="mt-4 grid gap-3 rounded-lg bg-stone-100 p-4 sm:grid-cols-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+          Keputusan
+        </p>
+        <p className={verdictClassName(state.result.verdict)}>
+          {verdictLabel(state.result.verdict)}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+          Skor risiko
+        </p>
+        <p className="mt-1 text-lg font-semibold text-stone-950">
+          {state.result.riskScore}/100
+        </p>
+      </div>
+      <div className="sm:col-span-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+          Peringatan utama
+        </p>
+        <p className="mt-1 text-sm leading-5 text-stone-700">{warning}</p>
+      </div>
+    </div>
+  );
+}
+
+function verdictClassName(verdict: AnalysisResult["verdict"]) {
+  const color =
+    verdict === "BUY"
+      ? "text-emerald-700"
+      : verdict === "WAIT"
+        ? "text-amber-700"
+        : "text-rose-700";
+  return `mt-1 text-xl font-bold ${color}`;
+}
+
+function verdictLabel(verdict: AnalysisResult["verdict"]) {
+  if (verdict === "BUY") return "BELI";
+  if (verdict === "WAIT") return "TUNGGU";
+  return "HINDARI";
+}
+
+function watchlistStatusLabel(status: WatchlistItem["status"]) {
+  if (status === "watching") return "Dipantau";
+  if (status === "waiting") return "Menunggu";
+  if (status === "avoid") return "Hindari";
+  return "Sudah dibeli";
+}
+
+function isTimeHorizon(value: unknown): value is TimeHorizon {
+  return value === "short" || value === "medium" || value === "long";
+}
+
+function isDataSource(value: unknown): value is DataSource {
+  return (
+    value === "live_public_market_data" ||
+    value === "manual_input" ||
+    value === "semi_auto_import" ||
+    value === "bibit_import" ||
+    value === "savings_import" ||
+    value === "mock_data"
+  );
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
