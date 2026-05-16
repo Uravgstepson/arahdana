@@ -1,9 +1,11 @@
 import type {
   AlertRule,
   AppNotification,
+  BetaSignup,
   FinancialGoal,
   GoalContribution,
   PortfolioItem,
+  PortfolioReviewReport,
   SavedAnalysisResult,
   UserSettings,
   WatchlistItem,
@@ -18,6 +20,8 @@ export const STORAGE_KEYS = {
   goalContributions: "arahdana.goalContributions",
   notifications: "arahdana.notifications",
   alertRules: "arahdana.alertRules",
+  reports: "arahdana.reports",
+  betaSignups: "arahdana.betaSignups",
 } as const;
 
 export type ArahDanaStorageAdapter = {
@@ -37,6 +41,10 @@ export type ArahDanaStorageAdapter = {
   writeNotifications(items: AppNotification[]): void;
   readAlertRules(): AlertRule[] | null;
   writeAlertRules(items: AlertRule[]): void;
+  readReports(): PortfolioReviewReport[] | null;
+  writeReports(items: PortfolioReviewReport[]): void;
+  readBetaSignups(): BetaSignup[] | null;
+  writeBetaSignups(items: BetaSignup[]): void;
   clearAll(defaultSettings: UserSettings): void;
 };
 
@@ -89,6 +97,18 @@ export const localArahDanaStorage: ArahDanaStorageAdapter = {
   writeAlertRules(items) {
     writeJson(STORAGE_KEYS.alertRules, items);
   },
+  readReports() {
+    return readJson<PortfolioReviewReport[]>(STORAGE_KEYS.reports);
+  },
+  writeReports(items) {
+    writeJson(STORAGE_KEYS.reports, items);
+  },
+  readBetaSignups() {
+    return readJson<BetaSignup[]>(STORAGE_KEYS.betaSignups);
+  },
+  writeBetaSignups(items) {
+    writeJson(STORAGE_KEYS.betaSignups, items);
+  },
   clearAll(defaultSettings) {
     writeJson(STORAGE_KEYS.portfolio, []);
     writeJson(STORAGE_KEYS.watchlist, []);
@@ -98,6 +118,8 @@ export const localArahDanaStorage: ArahDanaStorageAdapter = {
     writeJson(STORAGE_KEYS.goalContributions, []);
     writeJson(STORAGE_KEYS.notifications, []);
     writeJson(STORAGE_KEYS.alertRules, []);
+    writeJson(STORAGE_KEYS.reports, []);
+    writeJson(STORAGE_KEYS.betaSignups, []);
   },
 };
 

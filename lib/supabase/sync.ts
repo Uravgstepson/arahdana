@@ -9,6 +9,7 @@ import type {
   InvestmentType,
   GoalContribution,
   PortfolioItem,
+  PortfolioReviewReport,
   RiskCategory,
   SavedAnalysisResult,
   TimeHorizon,
@@ -118,6 +119,17 @@ type AlertRuleRow = {
   last_check_message: string | null;
   last_observed_verdict: AlertRule["lastObservedVerdict"] | null;
   created_at: string;
+};
+
+type ReportRow = {
+  id: string;
+  local_id: string | null;
+  report_type: PortfolioReviewReport["type"];
+  title: string;
+  period_start: string;
+  period_end: string;
+  generated_at: string;
+  report: PortfolioReviewReport;
 };
 
 export async function loadCloudPortfolio(user: User) {
@@ -422,6 +434,43 @@ export async function saveCloudAlertRules(user: User, items: AlertRule[]) {
   return { count: rows.length };
 }
 
+export async function loadCloudReports(user: User) {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from("portfolio_reports")
+    .select("id,local_id,report_type,title,period_start,period_end,generated_at,report")
+    .eq("user_id", user.id)
+    .order("generated_at", { ascending: false });
+
+  if (error) throw error;
+  return ((data ?? []) as ReportRow[]).map(rowToReport);
+}
+
+export async function saveCloudReports(user: User, items: PortfolioReviewReport[]) {
+  const supabase = requireSupabase();
+  const safeItems = normalizeReportsForCloud(items);
+  const { error: deleteError } = await supabase.from("portfolio_reports").delete().eq("user_id", user.id);
+  if (deleteError) throw deleteError;
+
+  if (safeItems.length === 0) return { count: 0 };
+
+  const rows = safeItems.map((item) => ({
+    user_id: user.id,
+    local_id: item.id,
+    report_type: item.type,
+    title: safeText(item.title, "Portfolio review"),
+    period_start: safeTimestamp(item.periodStart) ?? new Date().toISOString(),
+    period_end: safeTimestamp(item.periodEnd) ?? new Date().toISOString(),
+    generated_at: safeTimestamp(item.generatedAt) ?? new Date().toISOString(),
+    report: toJson(item),
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from("portfolio_reports").insert(rows);
+  if (error) throw error;
+  return { count: rows.length };
+}
+
 export async function syncLocalDataToCloud(user: User) {
   const portfolio = localArahDanaStorage.readPortfolio() ?? [];
   const watchlist = localArahDanaStorage.readWatchlist() ?? [];
@@ -430,6 +479,7 @@ export async function syncLocalDataToCloud(user: User) {
   const goals = localArahDanaStorage.readGoals() ?? [];
   const goalContributions = localArahDanaStorage.readGoalContributions() ?? [];
   const alertRules = localArahDanaStorage.readAlertRules() ?? [];
+  const reports = localArahDanaStorage.readReports() ?? [];
 
   const results = await Promise.allSettled([
     saveCloudPortfolio(user, portfolio),
@@ -439,6 +489,7 @@ export async function syncLocalDataToCloud(user: User) {
     saveCloudGoals(user, goals),
     saveCloudGoalContributions(user, goalContributions),
     saveCloudAlertRules(user, alertRules),
+    saveCloudReports(user, reports),
   ]);
 
   const failures = results
@@ -461,6 +512,7 @@ export async function syncLocalDataToCloud(user: User) {
     goalCount: results[4].status === "fulfilled" ? results[4].value.count : 0,
     goalContributionCount: results[5].status === "fulfilled" ? results[5].value.count : 0,
     alertRuleCount: results[6].status === "fulfilled" ? results[6].value.count : 0,
+    reportCount: results[7].status === "fulfilled" ? results[7].value.count : 0,
   };
 }
 
@@ -472,6 +524,7 @@ const syncStepLabels = [
   "Tujuan finansial",
   "Kontribusi tujuan",
   "Alert",
+  "Laporan",
 ];
 
 async function getOrCreateDefaultPortfolioId(user: User) {
@@ -609,6 +662,18 @@ function rowToAlertRule(row: AlertRuleRow): AlertRule {
   });
 }
 
+function rowToReport(row: ReportRow): PortfolioReviewReport {
+  return normalizeReport({
+    ...row.report,
+    id: row.report?.id ?? row.local_id ?? row.id,
+    type: row.report?.type ?? row.report_type,
+    title: row.report?.title ?? row.title,
+    periodStart: row.report?.periodStart ?? row.period_start,
+    periodEnd: row.report?.periodEnd ?? row.period_end,
+    generatedAt: row.report?.generatedAt ?? row.generated_at,
+  });
+}
+
 export function normalizeSettings(settings: Partial<UserSettings> | null | undefined): UserSettings {
   const preferredInstruments = Array.isArray(settings?.preferredInstruments)
     ? settings.preferredInstruments.filter(isInvestmentType)
@@ -718,6 +783,11 @@ function normalizeAlertRulesForCloud(items: AlertRule[]) {
   return items.map((item) => normalizeAlertRule({ ...item, id: uniqueLocalId(item.id, seenIds) }));
 }
 
+function normalizeReportsForCloud(items: PortfolioReviewReport[]) {
+  const seenIds = new Set<string>();
+  return items.map((item) => normalizeReport({ ...item, id: uniqueLocalId(item.id, seenIds) }));
+}
+
 function normalizeGoal(goal: FinancialGoal): FinancialGoal {
   const riskTolerance = clampNumber(goal.riskTolerance, 5, 30);
   return {
@@ -784,6 +854,67 @@ function normalizeAlertRule(item: AlertRule): AlertRule {
     lastCheckMessage: item.lastCheckMessage ?? undefined,
     lastObservedVerdict: isVerdict(item.lastObservedVerdict) ? item.lastObservedVerdict : undefined,
     createdAt: safeTimestamp(item.createdAt) ?? new Date().toISOString(),
+  };
+}
+
+function normalizeReport(item: PortfolioReviewReport): PortfolioReviewReport {
+  const generatedAt = safeTimestamp(item.generatedAt) ?? new Date().toISOString();
+  return {
+    ...item,
+    id: safeText(item.id, crypto.randomUUID()),
+    type: isReportType(item.type) ? item.type : "monthly",
+    title: safeText(item.title, "Portfolio review"),
+    periodStart: safeTimestamp(item.periodStart) ?? generatedAt,
+    periodEnd: safeTimestamp(item.periodEnd) ?? generatedAt,
+    generatedAt,
+    summary: safeText(item.summary, "Laporan portofolio tersimpan."),
+    portfolioValue: nonNegativeNumber(item.portfolioValue),
+    investedValue: nonNegativeNumber(item.investedValue),
+    gainLoss: typeof item.gainLoss === "number" && Number.isFinite(item.gainLoss) ? item.gainLoss : 0,
+    gainLossPercent:
+      typeof item.gainLossPercent === "number" && Number.isFinite(item.gainLossPercent)
+        ? item.gainLossPercent
+        : 0,
+    healthScore: clampNumber(item.healthScore, 0, 100),
+    allocation: Array.isArray(item.allocation) ? item.allocation : [],
+    riskExposure: item.riskExposure ?? {
+      stablePercent: 0,
+      bondPercent: 0,
+      equityPercent: 0,
+      highRiskPercent: 0,
+      concentrationPercent: 0,
+    },
+    dcaSummary: item.dcaSummary ?? {
+      contributionCount: 0,
+      totalContribution: 0,
+      averageContribution: 0,
+    },
+    goalSummary: item.goalSummary ?? {
+      activeGoals: 0,
+      averageProgressPercent: 0,
+      goalsOnTrack: 0,
+    },
+    journalInsights: Array.isArray(item.journalInsights) ? item.journalInsights : [],
+    majorAlerts: Array.isArray(item.majorAlerts) ? item.majorAlerts : [],
+    analysis: item.analysis ?? {
+      improved: [],
+      worsened: [],
+      watch: [],
+      consistent: [],
+      tooRisky: [],
+    },
+    scores: item.scores ?? {
+      discipline: 0,
+      diversification: 0,
+      riskManagement: 0,
+      consistency: 0,
+    },
+    sourceCounts: item.sourceCounts ?? {
+      holdings: 0,
+      analyzerResults: 0,
+      goals: 0,
+      alerts: 0,
+    },
   };
 }
 
@@ -868,6 +999,10 @@ function isAlertType(value: unknown): value is AlertRule["alertType"] {
     value === "portfolio_loss" ||
     value === "concentration_risk"
   );
+}
+
+function isReportType(value: unknown): value is PortfolioReviewReport["type"] {
+  return value === "weekly" || value === "monthly" || value === "quarterly";
 }
 
 function isWatchlistStatus(value: unknown): value is WatchlistItem["status"] {

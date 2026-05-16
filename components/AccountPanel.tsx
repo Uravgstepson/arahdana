@@ -15,6 +15,7 @@ import {
   loadCloudGoalContributions,
   loadCloudGoals,
   loadCloudPortfolio,
+  loadCloudReports,
   loadCloudSettings,
   loadCloudWatchlist,
   syncLocalDataToCloud,
@@ -65,7 +66,7 @@ export function AccountPanel() {
       const result = await syncLocalDataToCloud(user);
       setStatus({
         tone: "success",
-        message: `Data lokal tersinkron: ${result.portfolioCount} holding, ${result.watchlistCount} pantauan, ${result.goalCount} tujuan, ${result.analysisCount} hasil analisis, ${result.alertRuleCount} alert.`,
+        message: `Data lokal tersinkron: ${result.portfolioCount} holding, ${result.watchlistCount} pantauan, ${result.goalCount} tujuan, ${result.analysisCount} hasil analisis, ${result.alertRuleCount} alert, ${result.reportCount} laporan.`,
       });
       dispatchToast({
         tone: "success",
@@ -79,7 +80,7 @@ export function AccountPanel() {
     if (!user) return;
 
     await runTask(async () => {
-      const [portfolio, watchlist, settings, analysisResults, goals, goalContributions, alertRules] = await Promise.all([
+      const [portfolio, watchlist, settings, analysisResults, goals, goalContributions, alertRules, reports] = await Promise.all([
         loadCloudPortfolio(user),
         loadCloudWatchlist(user),
         loadCloudSettings(user),
@@ -87,6 +88,7 @@ export function AccountPanel() {
         loadCloudGoals(user),
         loadCloudGoalContributions(user),
         loadCloudAlertRules(user),
+        loadCloudReports(user),
       ]);
 
       localArahDanaStorage.writePortfolio(portfolio);
@@ -96,10 +98,11 @@ export function AccountPanel() {
       localArahDanaStorage.writeGoals(goals);
       localArahDanaStorage.writeGoalContributions(goalContributions);
       localArahDanaStorage.writeAlertRules(alertRules);
+      localArahDanaStorage.writeReports(reports);
       window.dispatchEvent(new Event("arahdana:local-data-updated"));
       setStatus({
         tone: "success",
-        message: `Cloud dipulihkan ke browser ini: ${portfolio.length} holding, ${watchlist.length} pantauan, ${goals.length} tujuan, ${analysisResults.length} hasil analisis, ${alertRules.length} alert.`,
+        message: `Cloud dipulihkan ke browser ini: ${portfolio.length} holding, ${watchlist.length} pantauan, ${goals.length} tujuan, ${analysisResults.length} hasil analisis, ${alertRules.length} alert, ${reports.length} laporan.`,
       });
       dispatchToast({
         tone: "success",

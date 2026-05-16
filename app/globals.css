@@ -383,3 +383,28 @@ tbody tr:hover {
       var(--background);
   }
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+
+  aside,
+  header,
+  footer,
+  button,
+  .motion-nav,
+  .motion-shell,
+  .print-area + aside {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .print-area {
+    display: block !important;
+  }
+}

@@ -23,7 +23,8 @@ type NavItem = {
     | "notes"
     | "feedback"
     | "notifications"
-    | "alerts";
+    | "alerts"
+    | "reports";
 };
 
 const primaryNav: NavItem[] = [
@@ -37,6 +38,7 @@ const primaryNav: NavItem[] = [
 const desktopExtras: NavItem[] = [
   { href: "/goals", label: "Tujuan", shortLabel: "Tujuan", icon: "goals" },
   { href: "/alerts", label: "Alerts", shortLabel: "Alerts", icon: "alerts" },
+  { href: "/reports", label: "Reports", shortLabel: "Reports", icon: "reports" },
   { href: "/market-prices", label: "Harga Pasar", shortLabel: "Pasar", icon: "market" },
   { href: "/notifications", label: "Notifikasi", shortLabel: "Notif", icon: "notifications" },
   { href: "/integrations", label: "Integrasi", shortLabel: "Integrasi", icon: "integrations" },
@@ -220,6 +222,14 @@ function NavGlyph({ icon }: { icon: NavItem["icon"] }) {
           <path {...common} d="M12 4v6" />
           <path {...common} d="M12 14h.01" />
           <path {...common} d="M5 20h14l-7-16z" />
+        </>
+      ) : null}
+      {icon === "reports" ? (
+        <>
+          <path {...common} d="M7 4h10l2 2v14H7z" />
+          <path {...common} d="M10 10h6" />
+          <path {...common} d="M10 14h6" />
+          <path {...common} d="M10 18h3" />
         </>
       ) : null}
     </svg>

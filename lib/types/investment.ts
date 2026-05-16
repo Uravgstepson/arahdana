@@ -251,3 +251,95 @@ export type AlertCheckResult = {
   message: string;
   checkedAt: string;
 };
+
+export type ReportType = "weekly" | "monthly" | "quarterly";
+
+export type ReportScoreSet = {
+  discipline: number;
+  diversification: number;
+  riskManagement: number;
+  consistency: number;
+};
+
+export type ReportAllocationSlice = {
+  type: InvestmentType;
+  label: string;
+  percent: number;
+  value: number;
+  previousPercent?: number;
+};
+
+export type PortfolioReviewReport = {
+  id: string;
+  type: ReportType;
+  title: string;
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+  summary: string;
+  portfolioValue: number;
+  investedValue: number;
+  gainLoss: number;
+  gainLossPercent: number;
+  previousPortfolioValue?: number;
+  previousGainLossPercent?: number;
+  healthScore: number;
+  previousHealthScore?: number;
+  bestPerformer?: {
+    name: string;
+    gainLossPercent: number;
+    gainLoss: number;
+  };
+  worstPerformer?: {
+    name: string;
+    gainLossPercent: number;
+    gainLoss: number;
+  };
+  allocation: ReportAllocationSlice[];
+  riskExposure: {
+    stablePercent: number;
+    bondPercent: number;
+    equityPercent: number;
+    highRiskPercent: number;
+    concentrationPercent: number;
+  };
+  previousRiskExposure?: PortfolioReviewReport["riskExposure"];
+  dcaSummary: {
+    contributionCount: number;
+    totalContribution: number;
+    averageContribution: number;
+  };
+  goalSummary: {
+    activeGoals: number;
+    averageProgressPercent: number;
+    goalsOnTrack: number;
+  };
+  journalInsights: string[];
+  majorAlerts: string[];
+  analysis: {
+    improved: string[];
+    worsened: string[];
+    watch: string[];
+    consistent: string[];
+    tooRisky: string[];
+  };
+  scores: ReportScoreSet;
+  sourceCounts: {
+    holdings: number;
+    analyzerResults: number;
+    goals: number;
+    alerts: number;
+  };
+};
+
+export type BetaInvestmentExperience = "beginner" | "intermediate" | "advanced" | "professional";
+
+export type BetaSignup = {
+  id: string;
+  name: string;
+  email: string;
+  investmentExperience: BetaInvestmentExperience;
+  feedbackInterest: string;
+  createdAt: string;
+  storageMode?: "supabase" | "local";
+};

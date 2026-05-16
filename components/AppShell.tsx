@@ -17,6 +17,7 @@ const titles: Record<string, string> = {
   "/portfolio": "Portofolio",
   "/goals": "Tujuan",
   "/alerts": "Alerts",
+  "/reports": "Reports",
   "/notifications": "Notifikasi",
   "/analyzer": "Analisis",
   "/watchlist": "Pantauan",
@@ -32,8 +33,18 @@ const titles: Record<string, string> = {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isPublicRoute = pathname === "/" || pathname === "/beta";
   const title = titles[pathname] ?? "ArahDana";
   const unreadCount = useUnreadNotificationCount();
+
+  if (isPublicRoute) {
+    return (
+      <div className="min-h-screen text-stone-950">
+        <ToastViewport />
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen text-stone-950">

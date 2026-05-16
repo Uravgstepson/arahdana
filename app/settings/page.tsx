@@ -539,6 +539,7 @@ export default function SettingsPage() {
           <SettingsLink href="/changelog" title="Changelog" />
           <SettingsLink href="/feedback" title="Feedback beta" />
           <SettingsLink href="/notifications" title="Notifikasi" />
+          <SettingsLink href="/reports" title="Reports" />
           <SettingsLink href="/watchlist" title="Pantauan" />
         </div>
       </section>

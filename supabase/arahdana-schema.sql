@@ -153,6 +153,31 @@ create table if not exists public.alert_rules (
   unique (user_id, local_id)
 );
 
+create table if not exists public.portfolio_reports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  local_id text,
+  report_type text not null default 'monthly',
+  title text not null default 'Portfolio review',
+  period_start timestamptz not null default now(),
+  period_end timestamptz not null default now(),
+  generated_at timestamptz not null default now(),
+  report jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, local_id)
+);
+
+create table if not exists public.beta_signups (
+  id uuid primary key default gen_random_uuid(),
+  local_id text,
+  name text not null,
+  email text not null,
+  investment_experience text not null default 'beginner',
+  feedback_interest text not null default '',
+  created_at timestamptz not null default now()
+);
+
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists display_name text;
 alter table public.profiles add column if not exists created_at timestamptz not null default now();
@@ -266,6 +291,24 @@ alter table public.alert_rules add column if not exists last_observed_verdict te
 alter table public.alert_rules add column if not exists created_at timestamptz not null default now();
 alter table public.alert_rules add column if not exists updated_at timestamptz not null default now();
 
+alter table public.portfolio_reports add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.portfolio_reports add column if not exists local_id text;
+alter table public.portfolio_reports add column if not exists report_type text not null default 'monthly';
+alter table public.portfolio_reports add column if not exists title text not null default 'Portfolio review';
+alter table public.portfolio_reports add column if not exists period_start timestamptz not null default now();
+alter table public.portfolio_reports add column if not exists period_end timestamptz not null default now();
+alter table public.portfolio_reports add column if not exists generated_at timestamptz not null default now();
+alter table public.portfolio_reports add column if not exists report jsonb not null default '{}'::jsonb;
+alter table public.portfolio_reports add column if not exists created_at timestamptz not null default now();
+alter table public.portfolio_reports add column if not exists updated_at timestamptz not null default now();
+
+alter table public.beta_signups add column if not exists local_id text;
+alter table public.beta_signups add column if not exists name text not null default '';
+alter table public.beta_signups add column if not exists email text not null default '';
+alter table public.beta_signups add column if not exists investment_experience text not null default 'beginner';
+alter table public.beta_signups add column if not exists feedback_interest text not null default '';
+alter table public.beta_signups add column if not exists created_at timestamptz not null default now();
+
 create unique index if not exists portfolios_user_id_name_key on public.portfolios (user_id, name);
 create unique index if not exists holdings_user_id_local_id_key on public.holdings (user_id, local_id);
 create unique index if not exists watchlist_items_user_id_local_id_key on public.watchlist_items (user_id, local_id);
@@ -273,6 +316,7 @@ create unique index if not exists analysis_results_user_id_local_id_key on publi
 create unique index if not exists financial_goals_user_id_local_id_key on public.financial_goals (user_id, local_id);
 create unique index if not exists goal_contributions_user_id_local_id_key on public.goal_contributions (user_id, local_id);
 create unique index if not exists alert_rules_user_id_local_id_key on public.alert_rules (user_id, local_id);
+create unique index if not exists portfolio_reports_user_id_local_id_key on public.portfolio_reports (user_id, local_id);
 
 alter table public.profiles enable row level security;
 alter table public.portfolios enable row level security;
@@ -284,6 +328,8 @@ alter table public.feedback enable row level security;
 alter table public.financial_goals enable row level security;
 alter table public.goal_contributions enable row level security;
 alter table public.alert_rules enable row level security;
+alter table public.portfolio_reports enable row level security;
+alter table public.beta_signups enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
@@ -545,6 +591,42 @@ on public.alert_rules
 for delete
 to authenticated
 using ((select auth.uid()) = user_id);
+
+drop policy if exists "portfolio_reports_select_own" on public.portfolio_reports;
+create policy "portfolio_reports_select_own"
+on public.portfolio_reports
+for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "portfolio_reports_insert_own" on public.portfolio_reports;
+create policy "portfolio_reports_insert_own"
+on public.portfolio_reports
+for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "portfolio_reports_update_own" on public.portfolio_reports;
+create policy "portfolio_reports_update_own"
+on public.portfolio_reports
+for update
+to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "portfolio_reports_delete_own" on public.portfolio_reports;
+create policy "portfolio_reports_delete_own"
+on public.portfolio_reports
+for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "beta_signups_insert_public" on public.beta_signups;
+create policy "beta_signups_insert_public"
+on public.beta_signups
+for insert
+to anon, authenticated
+with check (true);
 
 -- Refresh PostgREST schema cache after table/policy changes.
 -- This prevents PGRST205 "table not found in schema cache" right after running the migration.

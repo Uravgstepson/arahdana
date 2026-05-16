@@ -3,10 +3,12 @@ import { STORAGE_KEYS } from "@/lib/storage/localStorage";
 import type {
   DataSource,
   AppNotification,
+  BetaSignup,
   FinancialGoal,
   InvestmentType,
   GoalContribution,
   PortfolioItem,
+  PortfolioReviewReport,
   RiskCategory,
   TimeHorizon,
   UserSettings,
@@ -21,6 +23,8 @@ export type ArahDanaBackupData = {
   goals: FinancialGoal[];
   goalContributions: GoalContribution[];
   notifications: AppNotification[];
+  reports: PortfolioReviewReport[];
+  betaSignups: BetaSignup[];
   settings: UserSettings;
   analysisResults: unknown[];
 };
@@ -117,6 +121,8 @@ export function collectArahDanaData(): ArahDanaBackupData {
     goals: readArray<FinancialGoal>(STORAGE_KEYS.goals),
     goalContributions: readArray<GoalContribution>(STORAGE_KEYS.goalContributions),
     notifications: readArray<AppNotification>(STORAGE_KEYS.notifications),
+    reports: readArray<PortfolioReviewReport>(STORAGE_KEYS.reports),
+    betaSignups: readArray<BetaSignup>(STORAGE_KEYS.betaSignups),
     settings: normalizeSettings(readObject(STORAGE_KEYS.settings)),
     analysisResults: readArray<unknown>(STORAGE_KEYS.analysisResults),
   };
@@ -143,6 +149,8 @@ export async function importArahDanaData(file: File): Promise<BackupDataResult> 
   writeJson(STORAGE_KEYS.goals, validation.data.goals);
   writeJson(STORAGE_KEYS.goalContributions, validation.data.goalContributions);
   writeJson(STORAGE_KEYS.notifications, validation.data.notifications);
+  writeJson(STORAGE_KEYS.reports, validation.data.reports);
+  writeJson(STORAGE_KEYS.betaSignups, validation.data.betaSignups);
   writeJson(STORAGE_KEYS.settings, validation.data.settings);
   writeJson(STORAGE_KEYS.analysisResults, validation.data.analysisResults);
   notifyLocalDataUpdated();
@@ -192,6 +200,12 @@ export function validateBackupData(data: unknown): BackupDataResult {
   );
   if (!notifications.ok) return notifications;
 
+  const reports = validateReports(data.data.reports);
+  if (!reports.ok) return reports;
+
+  const betaSignups = validateBetaSignups(data.data.betaSignups);
+  if (!betaSignups.ok) return betaSignups;
+
   const settings = validateSettings(
     data.data.settings === undefined ? {} : data.data.settings,
   );
@@ -209,6 +223,8 @@ export function validateBackupData(data: unknown): BackupDataResult {
       goals: goals.items,
       goalContributions: goalContributions.items,
       notifications: notifications.items,
+      reports: reports.items,
+      betaSignups: betaSignups.items,
       settings: settings.settings,
       analysisResults: analysisResults.items,
     },
@@ -557,6 +573,26 @@ function validateAnalysisResults(
     return { ok: false, message: "Data analysis results di backup tidak valid." };
   }
   return { ok: true, items: value };
+}
+
+function validateReports(
+  value: unknown,
+): { ok: true; items: PortfolioReviewReport[] } | { ok: false; message: string } {
+  if (value === undefined) return { ok: true, items: [] };
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data reports di backup tidak valid." };
+  }
+  return { ok: true, items: value.filter(isRecord) as PortfolioReviewReport[] };
+}
+
+function validateBetaSignups(
+  value: unknown,
+): { ok: true; items: BetaSignup[] } | { ok: false; message: string } {
+  if (value === undefined) return { ok: true, items: [] };
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data beta signup di backup tidak valid." };
+  }
+  return { ok: true, items: value.filter(isRecord) as BetaSignup[] };
 }
 
 function normalizeSettings(settings: Partial<UserSettings> | null): UserSettings {
