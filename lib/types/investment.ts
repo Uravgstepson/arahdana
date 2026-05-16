@@ -9,6 +9,8 @@ export type InvestmentType =
 
 export type TimeHorizon = "short" | "medium" | "long";
 
+export type LanguagePreference = "id" | "en";
+
 export type Verdict = "BUY" | "WAIT" | "AVOID";
 
 export type RiskCategory = "low" | "medium" | "high";
@@ -127,6 +129,7 @@ export type UserSettings = {
   riskTolerance: number;
   timeHorizon: TimeHorizon;
   preferredInstruments: InvestmentType[];
+  language: LanguagePreference;
   /**
    * Estimasi imbal hasil tahunan (APR) untuk reksadana pasar uang / RDPU.
    * Dipakai hanya ketika tidak ada harga pasar live (NAV resmi) yang terhubung.

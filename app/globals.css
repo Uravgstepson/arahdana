@@ -30,6 +30,11 @@
   --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+:root[data-performance-mode="low"] {
+  --glass-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  --glass-shadow-lift: 0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -54,7 +59,9 @@
 }
 
 body {
+  margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     linear-gradient(
       180deg,
@@ -67,6 +74,9 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
+  transition:
+    background-color 520ms var(--ease-soft),
+    color 320ms var(--ease-fluid);
 }
 
 :root[data-theme="dark"] body {
@@ -139,6 +149,13 @@ a:active {
   backdrop-filter: blur(22px) saturate(1.45);
   -webkit-backdrop-filter: blur(22px) saturate(1.45);
   box-shadow: var(--glass-shadow), var(--inner-highlight);
+}
+
+:root[data-reduce-blur="true"] .bg-white,
+:root[data-reduce-blur="true"] .bg-white\/90,
+:root[data-reduce-blur="true"] .bg-white\/95 {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .bg-stone-100 {
@@ -217,6 +234,80 @@ thead {
   background: rgba(241, 245, 249, 0.84);
 }
 
+.top-atmosphere {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 0;
+  width: 100vw;
+  height: 220px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 88% 4%, rgba(16, 185, 129, 0.2), transparent 28%),
+    radial-gradient(ellipse at 18% 0%, rgba(0, 0, 0, 0.44), transparent 36%),
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.94) 0%,
+      rgba(0, 0, 0, 0.86) 24%,
+      rgba(6, 78, 59, 0.3) 62%,
+      rgba(245, 248, 247, 0) 100%
+    );
+}
+
+:root[data-theme="dark"] .top-atmosphere {
+  background:
+    radial-gradient(circle at 88% 4%, rgba(16, 185, 129, 0.18), transparent 28%),
+    radial-gradient(ellipse at 18% 0%, rgba(0, 0, 0, 0.36), transparent 36%),
+    linear-gradient(
+      180deg,
+      rgba(3, 7, 18, 0.96) 0%,
+      rgba(3, 7, 18, 0.82) 28%,
+      rgba(6, 78, 59, 0.28) 62%,
+      rgba(15, 23, 42, 0) 100%
+    );
+}
+
+.app-header {
+  position: sticky;
+  isolation: isolate;
+}
+
+.app-header-title-zone,
+.app-header-actions {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(3, 7, 18, 0.28);
+  box-shadow:
+    0 14px 32px rgba(3, 7, 18, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.app-header-actions {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.app-header-title {
+  color: #ffffff;
+  opacity: 1;
+  text-shadow:
+    0 2px 14px rgba(0, 0, 0, 0.42),
+    0 1px 2px rgba(0, 0, 0, 0.32);
+}
+
+.profile-popover {
+  transform-origin: top right;
+}
+
+.profile-menu-action:hover {
+  transform: none;
+}
+
+.profile-menu-action:active {
+  transform: none;
+}
+
 tbody tr {
   transition: background-color 150ms ease;
 }
@@ -260,7 +351,7 @@ tbody tr:hover {
 @keyframes drawer-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0) scale(0.96);
+    transform: translate3d(0, 36px, 0) scale(0.98);
   }
 
   to {
@@ -304,7 +395,7 @@ tbody tr:hover {
   }
 
   .motion-drawer {
-    animation: drawer-in 260ms var(--ease-fluid) both;
+    animation: drawer-in 380ms var(--ease-soft) both;
     transform-origin: bottom center;
   }
 
@@ -352,7 +443,7 @@ tbody tr:hover {
 @media (hover: none) {
   button:active,
   a:active {
-    transform: scale(0.98);
+    transform: none;
   }
 
   tbody tr:hover {
@@ -372,6 +463,20 @@ tbody tr:hover {
   }
 }
 
+:root[data-performance-mode="low"] .motion-shell,
+:root[data-performance-mode="low"] .page-flow,
+:root[data-performance-mode="low"] .page-flow > *,
+:root[data-performance-mode="low"] .motion-nav,
+:root[data-performance-mode="low"] .motion-drawer,
+:root[data-performance-mode="low"] .motion-handle span {
+  animation: none !important;
+}
+
+:root[data-performance-mode="low"] button,
+:root[data-performance-mode="low"] a {
+  transition-duration: 120ms;
+}
+
 @media (max-width: 767px) {
   body {
     background:
@@ -381,6 +486,12 @@ tbody tr:hover {
         rgba(237, 243, 247, 1) 100%
       ),
       var(--background);
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-header {
+    position: static;
   }
 }
 

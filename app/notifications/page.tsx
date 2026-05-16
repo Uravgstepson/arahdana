@@ -83,6 +83,7 @@ export default function NotificationsPage() {
         riskTolerance: 15,
         timeHorizon: "medium" as const,
         preferredInstruments: [],
+        language: "id" as const,
         ...settings,
         notificationPreferences: {
           ...preferences,
@@ -103,6 +104,7 @@ export default function NotificationsPage() {
         riskTolerance: 15,
         timeHorizon: "medium",
         preferredInstruments: [],
+        language: "id",
         ...settings,
         notificationPreferences: preferences,
       },
@@ -131,7 +133,7 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="max-w-4xl space-y-5">
       <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
         <p className="text-sm font-medium text-white/62">Notification Center</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight">

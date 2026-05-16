@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 import { formatRupiah } from "@/lib/utils/format";
+import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 export type AllocationDatum = {
@@ -27,6 +28,7 @@ export function AllocationChart({
   emptyMessage?: string;
   compact?: boolean;
 }) {
+  const performanceProfile = usePerformanceMode();
   const chartData = useMemo(() => normalizeData(data), [data]);
 
   return (
@@ -50,7 +52,9 @@ export function AllocationChart({
                       <Cell key={item.key} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip content={<AllocationTooltip />} />
+                  {performanceProfile.simplifyTooltips ? null : (
+                    <Tooltip content={<AllocationTooltip />} />
+                  )}
                 </PieChart>
             )}
           </MeasuredChartFrame>

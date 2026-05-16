@@ -3,6 +3,7 @@
 import {
   type FormEvent,
   type ReactNode,
+  memo,
   useEffect,
   useMemo,
   useState,
@@ -35,7 +36,11 @@ import { InstrumentBadge } from "@/components/InstrumentBadge";
 import { PortfolioHealthBreakdown } from "@/components/PortfolioHealthBreakdown";
 import { normalizeMarketTicker } from "@/lib/market/tickerUniverse";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
-import { loadCloudAlertRules, loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
+import {
+  loadCloudAlertRules,
+  loadCloudPortfolio,
+  saveCloudPortfolio,
+} from "@/lib/supabase/sync";
 import {
   normalizeSafeTicker,
   validatePositiveNumber,
@@ -110,12 +115,16 @@ export function PortfolioTable() {
 
         try {
           const cloudItems = await loadCloudPortfolio(user);
-          const cloudAlertRules = await loadCloudAlertRules(user).catch(() => storedAlertRules);
+          const cloudAlertRules = await loadCloudAlertRules(user).catch(
+            () => storedAlertRules,
+          );
           if (!isMounted) return;
           const nextItems =
             cloudItems.length > 0 ? cloudItems : (storedItems ?? []);
           setItems(nextItems);
-          setAlertRules(cloudAlertRules.length > 0 ? cloudAlertRules : storedAlertRules);
+          setAlertRules(
+            cloudAlertRules.length > 0 ? cloudAlertRules : storedAlertRules,
+          );
           setHasStoredPortfolio(true);
           localArahDanaStorage.writePortfolio(nextItems);
           setSyncMessage(
@@ -150,9 +159,7 @@ export function PortfolioTable() {
 
     void saveCloudPortfolio(user, items)
       .then(() => {
-        setSyncMessage(
-          "Cloud sync enabled. Portofolio tersimpan di Supabase dan localStorage.",
-        );
+        setSyncMessage("Cloud sync enabled. Portofolio tersimpan.");
       })
       .catch((error) => {
         setSyncMessage(
@@ -461,8 +468,8 @@ export function PortfolioTable() {
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
-        <div className="flex items-start justify-between gap-3">
+      <section className="overflow-hidden rounded-[1.65rem] bg-[linear-gradient(145deg,#03140f_0%,#064e3b_56%,#0f172a_100%)] p-5 text-white shadow-[0_18px_46px_rgba(6,78,59,0.16)] ring-1 ring-white/10 sm:p-7">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span
@@ -481,11 +488,11 @@ export function PortfolioTable() {
             <p className="mt-6 text-sm font-medium text-white/58">
               Total portofolio
             </p>
-            <h2 className="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">
+            <h2 className="mt-2 text-3xl font-bold leading-tight tracking-tight sm:text-5xl">
               {formatRupiah(totals.current)}
             </h2>
           </div>
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[1.1rem] bg-white/10 text-white/75 ring-1 ring-white/10">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[1rem] bg-white/10 text-white/75 ring-1 ring-white/10 sm:h-11 sm:w-11">
             <svg
               aria-hidden="true"
               className="h-5 w-5"
@@ -501,7 +508,7 @@ export function PortfolioTable() {
             </svg>
           </span>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <PortfolioHeroMetric
             label="Total P/L"
             value={formatRupiah(totals.profit)}
@@ -519,7 +526,7 @@ export function PortfolioTable() {
             helper={syncMessage}
           />
         </div>
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
             onClick={() => {
@@ -527,7 +534,7 @@ export function PortfolioTable() {
               setForm(createEmptyPortfolioForm());
               setIsFormOpen((current) => !current);
             }}
-            className="min-h-12 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300"
+            className="min-h-11 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300 sm:min-w-32"
           >
             {isFormOpen && !editingId ? "Tutup form" : "Tambah"}
           </button>
@@ -535,7 +542,7 @@ export function PortfolioTable() {
             type="button"
             onClick={refreshPrices}
             disabled={isRefreshing || items.length === 0}
-            className="min-h-12 rounded-[1rem] bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/12 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-[1rem] bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/12 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-40"
           >
             {isRefreshing ? "Memperbarui..." : "Perbarui Harga"}
           </button>
@@ -825,7 +832,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function AlertMeta({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+        {label}
+      </p>
       <p className="mt-1 text-sm font-semibold text-stone-950">{value}</p>
     </div>
   );
@@ -833,8 +842,10 @@ function AlertMeta({ label, value }: { label: string; value: string }) {
 
 function portfolioAlertStatus(rules: AlertRule[]) {
   if (rules.length === 0) return "No alert";
-  if (rules.some((rule) => rule.lastCheckStatus === "triggered")) return "Triggered";
-  if (rules.some((rule) => rule.lastCheckStatus === "error")) return "Needs check";
+  if (rules.some((rule) => rule.lastCheckStatus === "triggered"))
+    return "Triggered";
+  if (rules.some((rule) => rule.lastCheckStatus === "error"))
+    return "Needs check";
   if (rules.some((rule) => rule.enabled)) return "Active";
   return "Inactive";
 }
@@ -943,7 +954,7 @@ function AllocationChips({
   );
 }
 
-function HoldingGroupCard({
+const HoldingGroupCard = memo(function HoldingGroupCard({
   group,
   alertRules,
   onEdit,
@@ -957,7 +968,7 @@ function HoldingGroupCard({
   const toneClass = group.profit >= 0 ? "text-emerald-700" : "text-rose-700";
 
   return (
-    <article className="rounded-[1.35rem] bg-stone-100 p-3 sm:p-4">
+    <article className="rounded-[1.35rem] bg-stone-100/80 p-3 sm:p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-stone-950">{group.title}</h3>
@@ -991,9 +1002,9 @@ function HoldingGroupCard({
       </div>
     </article>
   );
-}
+});
 
-function HoldingRow({
+const HoldingRow = memo(function HoldingRow({
   holding,
   alertRules,
   onEdit,
@@ -1009,7 +1020,7 @@ function HoldingRow({
   const latestCheckedAt = latestAlertCheckedAt(alertRules);
 
   return (
-    <div className="rounded-[1.15rem] bg-white/80 p-3 ring-1 ring-stone-200/70">
+    <div className="rounded-[1.15rem] bg-white/86 p-3 ring-1 ring-stone-200/70">
       <div className="flex items-start gap-3">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-50 text-sm font-bold text-emerald-800 ring-1 ring-emerald-100">
           {initials(holding.item.name)}
@@ -1051,48 +1062,61 @@ function HoldingRow({
             <div className="flex flex-wrap gap-2">
               <Link
                 href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=portfolio_loss`}
-                className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                className="min-h-9 rounded-full border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
               >
                 Loss alert
               </Link>
               <Link
                 href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=concentration_risk`}
-                className="rounded-full border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                className="min-h-9 rounded-full border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
               >
                 Allocation alert
               </Link>
               <Link
                 href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=risk_score_worsens`}
-                className="rounded-full border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                className="min-h-9 rounded-full border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
               >
                 Risk alert
               </Link>
               <button
                 type="button"
                 onClick={() => onEdit(holding.item)}
-                className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100"
+                className="min-h-9 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100"
               >
                 Edit
               </button>
               <button
                 type="button"
                 onClick={() => onDelete(holding.item.id)}
-                className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                className="min-h-9 rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
               >
                 Hapus
               </button>
             </div>
           </div>
           <div className="mt-3 grid gap-2 rounded-lg bg-stone-100 p-3 sm:grid-cols-3">
-            <AlertMeta label="Alert status" value={portfolioAlertStatus(alertRules)} />
-            <AlertMeta label="Active alerts" value={String(alertRules.filter((rule) => rule.enabled).length)} />
-            <AlertMeta label="Last checked" value={latestCheckedAt ? formatDateTime(latestCheckedAt) : "Belum pernah"} />
+            <AlertMeta
+              label="Alert status"
+              value={portfolioAlertStatus(alertRules)}
+            />
+            <AlertMeta
+              label="Active alerts"
+              value={String(alertRules.filter((rule) => rule.enabled).length)}
+            />
+            <AlertMeta
+              label="Last checked"
+              value={
+                latestCheckedAt
+                  ? formatDateTime(latestCheckedAt)
+                  : "Belum pernah"
+              }
+            />
           </div>
         </div>
       </div>
     </div>
   );
-}
+});
 
 function StatusStrip({
   tone,

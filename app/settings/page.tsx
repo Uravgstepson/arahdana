@@ -10,6 +10,7 @@ import {
 } from "react";
 import type {
   InvestmentType,
+  LanguagePreference,
   NotificationPreferences,
   NotificationType,
   TimeHorizon,
@@ -33,6 +34,7 @@ import {
   loadCloudSettings,
   saveCloudSettings,
 } from "@/lib/supabase/sync";
+import { normalizeLanguage } from "@/lib/i18n";
 import {
   clampNumber,
   formatRupiah,
@@ -77,6 +79,11 @@ export default function SettingsPage() {
     document.documentElement.dataset.theme = isDarkMode ? "dark" : "light";
     window.localStorage.setItem(THEME_KEY, isDarkMode ? "dark" : "light");
   }, [isDarkMode]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    window.dispatchEvent(new Event("arahdana:settings-updated"));
+  }, [isHydrated, settings.language]);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -306,7 +313,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-5">
+    <div className="grid max-w-4xl gap-5">
       <SectionHeader
         title="Preferensi"
         description="Pengaturan aplikasi, profil risiko, dan notifikasi."
@@ -388,6 +395,21 @@ export default function SettingsPage() {
               <option value="short">Jangka pendek</option>
               <option value="medium">Jangka menengah</option>
               <option value="long">Jangka panjang</option>
+            </select>
+          </Field>
+          <Field label="Bahasa / Language">
+            <select
+              className="input"
+              value={settings.language}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  language: normalizeLanguage(e.target.value) as LanguagePreference,
+                })
+              }
+            >
+              <option value="id">Indonesia</option>
+              <option value="en">English</option>
             </select>
           </Field>
           <div className="rounded-lg bg-stone-100 p-4">
@@ -533,16 +555,11 @@ export default function SettingsPage() {
         <h2 className="text-lg font-semibold text-stone-950">Data tools</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <SettingsLink href="/portfolio" title="CSV import" />
-          <SettingsLink href="/goals" title="Goals/DCA" />
-          <SettingsLink href="/market-prices" title="Harga pasar" />
           <SettingsLink href="/integrations" title="Integrasi" />
-          <SettingsLink href="/onboarding" title="Onboarding" />
           <SettingsLink href="/changelog" title="Changelog" />
           <SettingsLink href="/feedback" title="Feedback beta" />
           <SettingsLink href="/beta-test" title="Report bug" />
-          <SettingsLink href="/notifications" title="Notifikasi" />
-          <SettingsLink href="/reports" title="Reports" />
-          <SettingsLink href="/watchlist" title="Pantauan" />
+          <SettingsLink href="/onboarding" title="Onboarding" />
         </div>
       </section>
 
@@ -761,6 +778,7 @@ function readStoredSettings() {
     timeHorizon: isTimeHorizon(saved.timeHorizon)
       ? saved.timeHorizon
       : defaults.timeHorizon,
+    language: normalizeLanguage(saved.language),
     aprMoneyMarketFund:
       typeof saved.aprMoneyMarketFund === "number" &&
       Number.isFinite(saved.aprMoneyMarketFund)

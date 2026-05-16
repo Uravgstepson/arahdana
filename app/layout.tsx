@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   applicationName: "ArahDana",
   title: "ArahDana",
-  description: "Dasbor pendukung keputusan investasi Indonesia",
+  description: "Home pendukung keputusan investasi Indonesia",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

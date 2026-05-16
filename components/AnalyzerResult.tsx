@@ -1,8 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { PriceChart } from "@/components/PriceChart";
-import { ScoreBreakdownChart } from "@/components/ScoreBreakdownChart";
 import type {
   AnalysisInput,
   AnalysisResult,
@@ -13,6 +12,23 @@ import {
   type ExplanationMode,
 } from "@/lib/analysis/explanation";
 import { cn, formatPercent, formatRupiah } from "@/lib/utils/format";
+
+const PriceChart = dynamic(
+  () => import("@/components/PriceChart").then((module) => module.PriceChart),
+  {
+    loading: () => <ChartLoadingBlock />,
+  },
+);
+
+const ScoreBreakdownChart = dynamic(
+  () =>
+    import("@/components/ScoreBreakdownChart").then(
+      (module) => module.ScoreBreakdownChart,
+    ),
+  {
+    loading: () => <ChartLoadingBlock />,
+  },
+);
 
 export function AnalyzerResult({
   input,
@@ -342,6 +358,12 @@ function ExplanationCard({
 
 function SkeletonBlock({ className }: { className: string }) {
   return <div className={`animate-pulse rounded-lg bg-stone-200 ${className}`} />;
+}
+
+function ChartLoadingBlock() {
+  return (
+    <div className="h-72 w-full rounded-lg bg-stone-100 motion-safe:animate-pulse" />
+  );
 }
 
 function verdictLabel(verdict: AnalysisResult["verdict"]) {

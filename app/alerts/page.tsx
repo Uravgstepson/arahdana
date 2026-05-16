@@ -1109,6 +1109,7 @@ function normalizeAlertSettings(settings: Partial<UserSettings> | null): UserSet
         : DEFAULT_USER_SETTINGS.riskTolerance,
     timeHorizon: settings?.timeHorizon ?? DEFAULT_USER_SETTINGS.timeHorizon,
     preferredInstruments: settings?.preferredInstruments ?? DEFAULT_USER_SETTINGS.preferredInstruments,
+    language: settings?.language ?? DEFAULT_USER_SETTINGS.language,
     aprMoneyMarketFund: settings?.aprMoneyMarketFund ?? DEFAULT_USER_SETTINGS.aprMoneyMarketFund,
   };
 }

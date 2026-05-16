@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 import type { AnalysisResult } from "@/lib/types/investment";
+import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 type ScorePoint = {
@@ -11,6 +12,7 @@ type ScorePoint = {
 };
 
 export function ScoreBreakdownChart({ result }: { result: AnalysisResult }) {
+  const performanceProfile = usePerformanceMode();
   const chartData = useMemo(() => buildScoreBreakdown(result), [result]);
 
   return (
@@ -25,8 +27,16 @@ export function ScoreBreakdownChart({ result }: { result: AnalysisResult }) {
               <CartesianGrid stroke="#e7edf3" strokeDasharray="3 3" />
               <XAxis type="number" domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 12 }} />
               <YAxis type="category" dataKey="label" width={132} tick={{ fill: "#334155", fontSize: 12 }} />
-              <Tooltip content={<ScoreTooltip />} />
-              <Bar dataKey="score" name="Skor" fill="#087f5b" radius={[0, 7, 7, 0]} />
+              {performanceProfile.simplifyTooltips ? null : (
+                <Tooltip content={<ScoreTooltip />} />
+              )}
+              <Bar
+                dataKey="score"
+                name="Skor"
+                fill="#087f5b"
+                radius={[0, 7, 7, 0]}
+                isAnimationActive={!performanceProfile.reduceChartAnimation}
+              />
             </BarChart>
         )}
       </MeasuredChartFrame>

@@ -13,6 +13,7 @@ import {
 import type { PortfolioItem } from "@/lib/types/investment";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
 import { formatRupiah } from "@/lib/utils/format";
+import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 type PerformancePoint = {
@@ -29,6 +30,7 @@ export function PortfolioPerformanceChart({
   items: PortfolioItem[];
   aprMoneyMarketFund: number;
 }) {
+  const performanceProfile = usePerformanceMode();
   const chartData = useMemo(
     () => buildPerformanceData(items, aprMoneyMarketFund),
     [aprMoneyMarketFund, items],
@@ -52,10 +54,32 @@ export function PortfolioPerformanceChart({
                 <CartesianGrid stroke="#e7edf3" strokeDasharray="3 3" />
                 <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} tickLine={false} minTickGap={20} />
                 <YAxis width={78} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={compactRupiah} />
-                <Tooltip content={<PerformanceTooltip />} />
-                <Bar dataKey="invested" name="Modal" fill="#94a3b8" radius={[7, 7, 0, 0]} />
-                <Bar dataKey="current" name="Nilai kini" fill="#087f5b" radius={[7, 7, 0, 0]} />
-                <Line type="monotone" dataKey="profit" name="P/L" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+                {performanceProfile.simplifyTooltips ? null : (
+                  <Tooltip content={<PerformanceTooltip />} />
+                )}
+                <Bar
+                  dataKey="invested"
+                  name="Modal"
+                  fill="#94a3b8"
+                  radius={[7, 7, 0, 0]}
+                  isAnimationActive={!performanceProfile.reduceChartAnimation}
+                />
+                <Bar
+                  dataKey="current"
+                  name="Nilai kini"
+                  fill="#087f5b"
+                  radius={[7, 7, 0, 0]}
+                  isAnimationActive={!performanceProfile.reduceChartAnimation}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="profit"
+                  name="P/L"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={performanceProfile.simplifyTooltips ? false : { r: 3 }}
+                  isAnimationActive={!performanceProfile.reduceChartAnimation}
+                />
               </ComposedChart>
           )}
         </MeasuredChartFrame>

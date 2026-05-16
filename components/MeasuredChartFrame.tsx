@@ -63,5 +63,5 @@ export function MeasuredChartFrame({
 }
 
 function ChartSkeleton() {
-  return <div className="h-full w-full animate-pulse rounded-lg bg-stone-100" />;
+  return <div className="h-full w-full rounded-lg bg-stone-100 motion-safe:animate-pulse" />;
 }

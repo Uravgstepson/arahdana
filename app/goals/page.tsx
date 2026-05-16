@@ -39,6 +39,7 @@ import {
   investmentTypeLabel,
   nonNegativeNumber,
 } from "@/lib/utils/format";
+import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import {
   goalCategoryLabel,
   goalRiskProfile,
@@ -781,6 +782,8 @@ function GoalCard({
 }
 
 function ProjectionChart({ plan }: { plan: GoalPlan }) {
+  const performanceProfile = usePerformanceMode();
+
   return (
     <section className="rounded-[1.2rem] bg-stone-100 p-4">
       <div className="flex items-center justify-between gap-3">
@@ -804,10 +807,12 @@ function ProjectionChart({ plan }: { plan: GoalPlan }) {
               tick={{ fill: "#64748b", fontSize: 12 }}
               tickFormatter={(value) => compactRupiah(Number(value))}
             />
-            <Tooltip content={<ProjectionTooltip />} />
-            <Line type="monotone" dataKey="low" name="Rendah" stroke="#94a3b8" strokeWidth={1.8} dot={false} isAnimationActive={false} />
-            <Line type="monotone" dataKey="base" name="Base" stroke="#087f5b" strokeWidth={2.4} dot={false} isAnimationActive={false} />
-            <Line type="monotone" dataKey="high" name="Tinggi" stroke="#2563eb" strokeWidth={1.8} dot={false} isAnimationActive={false} />
+            {performanceProfile.simplifyTooltips ? null : (
+              <Tooltip content={<ProjectionTooltip />} />
+            )}
+            <Line type="monotone" dataKey="low" name="Rendah" stroke="#94a3b8" strokeWidth={1.8} dot={false} isAnimationActive={!performanceProfile.reduceChartAnimation} />
+            <Line type="monotone" dataKey="base" name="Base" stroke="#087f5b" strokeWidth={2.4} dot={false} isAnimationActive={!performanceProfile.reduceChartAnimation} />
+            <Line type="monotone" dataKey="high" name="Tinggi" stroke="#2563eb" strokeWidth={1.8} dot={false} isAnimationActive={!performanceProfile.reduceChartAnimation} />
           </LineChart>
         )}
       </MeasuredChartFrame>

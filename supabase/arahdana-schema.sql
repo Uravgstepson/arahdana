@@ -64,6 +64,7 @@ create table if not exists public.user_settings (
   risk_tolerance numeric not null default 15,
   time_horizon text not null default 'medium',
   preferred_instruments jsonb not null default '["money_market_fund","bond_fund","stock"]'::jsonb,
+  language text not null default 'id',
   apr_money_market_fund numeric not null default 0.05,
   notification_preferences jsonb not null default '{"enabled":true,"browserEnabled":false,"reminderFrequency":"monthly","enabledTypes":["reminder","risk","watchlist","goal","portfolio","market"],"quietMode":false,"mobileVibration":false,"weeklySummary":true,"lastGeneratedAt":{}}'::jsonb,
   created_at timestamptz not null default now(),
@@ -238,6 +239,7 @@ alter table public.user_settings add column if not exists capital numeric not nu
 alter table public.user_settings add column if not exists risk_tolerance numeric not null default 15;
 alter table public.user_settings add column if not exists time_horizon text not null default 'medium';
 alter table public.user_settings add column if not exists preferred_instruments jsonb not null default '["money_market_fund","bond_fund","stock"]'::jsonb;
+alter table public.user_settings add column if not exists language text not null default 'id';
 alter table public.user_settings add column if not exists apr_money_market_fund numeric not null default 0.05;
 alter table public.user_settings add column if not exists notification_preferences jsonb not null default '{"enabled":true,"browserEnabled":false,"reminderFrequency":"monthly","enabledTypes":["reminder","risk","watchlist","goal","portfolio","market"],"quietMode":false,"mobileVibration":false,"weeklySummary":true,"lastGeneratedAt":{}}'::jsonb;
 alter table public.user_settings add column if not exists created_at timestamptz not null default now();

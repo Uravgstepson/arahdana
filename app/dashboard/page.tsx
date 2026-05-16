@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { AllocationChart } from "@/components/AllocationChart";
+import dynamic from "next/dynamic";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { LoadingState } from "@/components/AppState";
 import { useAuth } from "@/components/AuthProvider";
 import { PortfolioHealthCard } from "@/components/PortfolioHealthCard";
@@ -13,6 +13,8 @@ import type {
   PortfolioItem,
   RiskCategory,
   SavedAnalysisResult,
+  FinancialGoal,
+  GoalContribution,
   WatchlistItem,
 } from "@/lib/types/investment";
 import { dataSourceLabel } from "@/lib/providers/marketClient";
@@ -28,6 +30,22 @@ import {
   loadCloudSettings,
   loadCloudWatchlist,
 } from "@/lib/supabase/sync";
+import { usePerformanceMode } from "@/lib/utils/performanceMode";
+
+const AllocationChart = dynamic(
+  () =>
+    import("@/components/AllocationChart").then(
+      (module) => module.AllocationChart,
+    ),
+  {
+    loading: () => (
+      <div className="h-80 rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+        <div className="h-6 w-32 rounded-full bg-stone-200 motion-safe:animate-pulse" />
+        <div className="mt-5 h-56 rounded-[1.2rem] bg-stone-100 motion-safe:animate-pulse" />
+      </div>
+    ),
+  },
+);
 
 type Performer = {
   item: PortfolioItem;
@@ -35,17 +53,28 @@ type Performer = {
   profitPercent: number;
 };
 
+type HomeInsight = {
+  id: string;
+  eyebrow: string;
+  title: string;
+  message: string;
+  href?: string;
+};
+
 export default function DashboardPage() {
-  const { isLoading: isAuthLoading, user } = useAuth();
+  const { isLoading: isAuthLoading, profile, user } = useAuth();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [analysisResults, setAnalysisResults] = useState<SavedAnalysisResult[]>(
     [],
   );
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [goals, setGoals] = useState<FinancialGoal[]>([]);
+  const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
   const [riskTolerance, setRiskTolerance] = useState(15);
+  const [greetingTemplate, setGreetingTemplate] = useState("Halo, {name}");
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -59,6 +88,9 @@ export default function DashboardPage() {
         const storedAnalysisResults =
           localArahDanaStorage.readAnalysisResults();
         const storedNotifications = localArahDanaStorage.readNotifications();
+        const storedGoals = localArahDanaStorage.readGoals();
+        const storedGoalContributions =
+          localArahDanaStorage.readGoalContributions();
         const localPortfolio = Array.isArray(storedPortfolio)
           ? storedPortfolio.map(normalizePortfolioItem)
           : [];
@@ -71,6 +103,10 @@ export default function DashboardPage() {
         const localNotifications = Array.isArray(storedNotifications)
           ? storedNotifications
           : [];
+        const localGoals = Array.isArray(storedGoals) ? storedGoals : [];
+        const localGoalContributions = Array.isArray(storedGoalContributions)
+          ? storedGoalContributions
+          : [];
 
         if (!user) {
           if (!isMounted) return;
@@ -78,6 +114,8 @@ export default function DashboardPage() {
           setWatchlist(localWatchlist);
           setAnalysisResults(localAnalysisResults);
           setNotifications(localNotifications);
+          setGoals(localGoals);
+          setGoalContributions(localGoalContributions);
           if (
             storedSettings &&
             typeof storedSettings.aprMoneyMarketFund === "number" &&
@@ -114,6 +152,8 @@ export default function DashboardPage() {
           setWatchlist(nextWatchlist);
           setAnalysisResults(localAnalysisResults);
           setNotifications(localNotifications);
+          setGoals(localGoals);
+          setGoalContributions(localGoalContributions);
           localArahDanaStorage.writePortfolio(nextPortfolio);
           localArahDanaStorage.writeWatchlist(nextWatchlist);
           if (cloudSettings) {
@@ -146,6 +186,8 @@ export default function DashboardPage() {
           setWatchlist(localWatchlist);
           setAnalysisResults(localAnalysisResults);
           setNotifications(localNotifications);
+          setGoals(localGoals);
+          setGoalContributions(localGoalContributions);
           if (
             storedSettings &&
             typeof storedSettings.aprMoneyMarketFund === "number" &&
@@ -172,20 +214,38 @@ export default function DashboardPage() {
     };
   }, [isAuthLoading, user]);
 
+  useEffect(() => {
+    setGreetingTemplate(readSessionGreetingTemplate());
+  }, []);
+
   const metrics = useMemo(
     () => calculateDashboardMetrics(portfolio, aprMoneyMarketFund),
     [aprMoneyMarketFund, portfolio],
   );
   const hasPortfolio = portfolio.length > 0;
   const syncLabel = user ? "Cloud sync" : "Local";
+  const displayName = getDisplayName(profile?.display_name, user?.email);
+  const greeting = formatGreeting(greetingTemplate, displayName);
   const latestRecommendations = analysisResults.slice(0, 3);
   const latestAlert =
     notifications.find((item) => !item.readAt) ?? notifications[0] ?? null;
+  const insights = useMemo(
+    () =>
+      buildHomeInsights({
+        goals,
+        goalContributions,
+        latestAlert,
+        metrics,
+        portfolio,
+        watchlist,
+      }),
+    [goals, goalContributions, latestAlert, metrics, portfolio, watchlist],
+  );
 
   if (!isHydrated) {
     return (
       <LoadingState
-        title="Memuat dasbor"
+        title="Memuat Home"
         message="Mengambil data lokal dan cloud bila akun tersedia."
       />
     );
@@ -193,6 +253,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      <HomeGreetingInsightCard greeting={greeting} insights={insights} />
+
       <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-emerald-100 ring-1 ring-white/15">
@@ -404,6 +466,125 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
+  greeting,
+  insights,
+}: {
+  greeting: string;
+  insights: HomeInsight[];
+}) {
+  const performanceProfile = usePerformanceMode();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [interactionKey, setInteractionKey] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const activeInsight = insights[activeIndex] ?? insights[0];
+
+  useEffect(() => {
+    if (
+      insights.length <= 1 ||
+      performanceProfile.reduceMotion ||
+      performanceProfile.mode === "low"
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % insights.length);
+    }, 10000);
+
+    return () => window.clearInterval(timer);
+  }, [
+    insights.length,
+    interactionKey,
+    performanceProfile.mode,
+    performanceProfile.reduceMotion,
+  ]);
+
+  useEffect(() => {
+    setActiveIndex((current) => Math.min(current, Math.max(0, insights.length - 1)));
+  }, [insights.length]);
+
+  function goTo(index: number) {
+    setInteractionKey((current) => current + 1);
+    setActiveIndex(index);
+  }
+
+  function move(direction: 1 | -1) {
+    setInteractionKey((current) => current + 1);
+    setActiveIndex((current) =>
+      (current + direction + insights.length) % insights.length,
+    );
+  }
+
+  if (!activeInsight) return null;
+
+  return (
+    <section
+      className="overflow-hidden rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6"
+      aria-label="Insight Home"
+      onTouchStart={(event) => {
+        touchStartX.current = event.touches[0]?.clientX ?? null;
+      }}
+      onTouchEnd={(event) => {
+        const startX = touchStartX.current;
+        touchStartX.current = null;
+        const endX = event.changedTouches[0]?.clientX;
+        if (startX === null || endX === undefined || insights.length <= 1) return;
+        const delta = endX - startX;
+        if (Math.abs(delta) > 42) move(delta < 0 ? 1 : -1);
+      }}
+    >
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
+          ArahDana
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-950">
+          {greeting}
+        </h2>
+      </div>
+
+      <div className="mt-5 flex items-start justify-between gap-3 border-t border-stone-200 pt-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+            {activeInsight.eyebrow}
+          </p>
+          <h2 className="mt-2 text-lg font-semibold leading-tight text-stone-950">
+            {activeInsight.title}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-stone-600">
+            {activeInsight.message}
+          </p>
+        </div>
+        {activeInsight.href ? (
+          <Link
+            href={activeInsight.href}
+            className="shrink-0 rounded-full bg-stone-950 px-3 py-2 text-xs font-semibold text-white"
+          >
+            Buka
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="flex gap-1.5" aria-label="Pilih insight">
+          {insights.map((item, index) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => goTo(index)}
+              className={`h-2 rounded-full transition-all ${
+                index === activeIndex ? "w-6 bg-emerald-700" : "w-2 bg-stone-300"
+              }`}
+              aria-label={`Insight ${index + 1}`}
+              aria-current={index === activeIndex}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+});
 
 function DashboardMetric({
   label,
@@ -642,6 +823,147 @@ function watchlistStatusLabel(status: WatchlistItem["status"]) {
   if (status === "waiting") return "Menunggu";
   if (status === "avoid") return "Hindari";
   return "Sudah dibeli";
+}
+
+function buildHomeInsights({
+  goals,
+  goalContributions,
+  latestAlert,
+  metrics,
+  portfolio,
+  watchlist,
+}: {
+  goals: FinancialGoal[];
+  goalContributions: GoalContribution[];
+  latestAlert: AppNotification | null;
+  metrics: ReturnType<typeof calculateDashboardMetrics>;
+  portfolio: PortfolioItem[];
+  watchlist: WatchlistItem[];
+}): HomeInsight[] {
+  const insights: HomeInsight[] = [];
+
+  if (latestAlert) {
+    insights.push({
+      id: `notification:${latestAlert.id}`,
+      eyebrow: "Notifikasi penting",
+      title: latestAlert.title,
+      message: latestAlert.message,
+      href: "/notifications",
+    });
+  }
+
+  if (portfolio.length > 0) {
+    insights.push({
+      id: "health",
+      eyebrow: "Portfolio Health",
+      title:
+        metrics.healthScore >= 80
+          ? "Portofolio terlihat cukup sehat."
+          : metrics.healthScore >= 60
+            ? "Portofolio masih perlu dipantau."
+            : "Health Score perlu dicek.",
+      message: `Skor saat ini ${metrics.healthScore}/100. ${metrics.riskSummary.detail}.`,
+      href: "/portfolio#health-score",
+    });
+  }
+
+  const dominantAllocation = metrics.allocation
+    .slice()
+    .sort((a, b) => b.percent - a.percent)[0];
+  if (dominantAllocation && dominantAllocation.percent >= 55) {
+    insights.push({
+      id: "allocation",
+      eyebrow: "Alokasi",
+      title: `Portofolio dominan di ${investmentTypeLabel(dominantAllocation.type)}.`,
+      message: `${dominantAllocation.percent}% nilai portofolio ada di kategori ini. Cek apakah masih sesuai profil risiko.`,
+      href: "/portfolio",
+    });
+  }
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const hasGoalThisMonth = goalContributions.some(
+    (item) => item.contributionMonth === currentMonth,
+  );
+  if (goals.length > 0 && !hasGoalThisMonth) {
+    insights.push({
+      id: "goal-dca",
+      eyebrow: "DCA / Goals",
+      title: "DCA bulan ini belum dicatat.",
+      message: "Catat kontribusi saat sudah dilakukan supaya progress tujuan tetap rapi.",
+      href: "/goals",
+    });
+  }
+
+  const waitingWatchlist = watchlist.filter((item) => item.status === "waiting");
+  if (waitingWatchlist.length > 0) {
+    insights.push({
+      id: "watchlist",
+      eyebrow: "Pantauan",
+      title: `${waitingWatchlist.length} item sedang menunggu zona beli.`,
+      message: "Review pantauan tanpa perlu mengambil keputusan terburu-buru.",
+      href: "/watchlist",
+    });
+  }
+
+  insights.push({
+    id: "market-note",
+    eyebrow: "Catatan Pasar",
+    title: "Gunakan mode defensif saat data belum lengkap.",
+    message: "ArahDana memakai data tersimpan dan sinyal internal, bukan berita live.",
+    href: "/market-insight",
+  });
+
+  insights.push({
+    id: "calm-tip",
+    eyebrow: "Tip tenang",
+    title: "Keputusan baik biasanya punya alasan tertulis.",
+    message: "Catat alasan beli, tunggu, atau hindari agar review berikutnya lebih objektif.",
+    href: "/journal",
+  });
+
+  return insights.slice(0, 6);
+}
+
+function readSessionGreetingTemplate() {
+  if (typeof window === "undefined") return "Halo, {name}";
+  const key = "arahdana.sessionGreeting";
+  const existing = window.sessionStorage.getItem(key);
+  if (existing && greetingTemplates.includes(existing)) return existing;
+  const next =
+    greetingTemplates[Math.floor(Math.random() * greetingTemplates.length)] ??
+    "Halo, {name}";
+  window.sessionStorage.setItem(key, next);
+  return next;
+}
+
+const greetingTemplates = [
+  "Halo, {name}",
+  "Selamat datang, {name}",
+  "Siap cek portofolio, {name}?",
+  "Hai, {name}",
+  "Lihat kondisi dana kamu hari ini",
+];
+
+function formatGreeting(template: string, name: string) {
+  return template.replace("{name}", name || "Investor");
+}
+
+function getDisplayName(displayName?: string | null, email?: string | null) {
+  const profileName = displayName?.trim();
+  if (profileName) return profileName;
+
+  const emailName = email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  if (emailName) return titleCase(emailName);
+
+  return "Investor";
+}
+
+function titleCase(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function normalizePortfolioItem(item: PortfolioItem): PortfolioItem {

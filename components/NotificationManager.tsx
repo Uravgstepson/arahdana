@@ -29,6 +29,7 @@ export function NotificationManager() {
         riskTolerance: 15,
         timeHorizon: "medium",
         preferredInstruments: [],
+        language: "id",
         ...settings,
         notificationPreferences: preferences,
       },
@@ -47,6 +48,7 @@ export function NotificationManager() {
       riskTolerance: 15,
       timeHorizon: "medium",
       preferredInstruments: [],
+      language: "id",
       ...settings,
       notificationPreferences: {
         ...preferences,

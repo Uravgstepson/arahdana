@@ -156,6 +156,7 @@ function normalizeSettings(settings?: Partial<UserSettings> | null): UserSetting
     riskTolerance: nonNegativeNumber(settings?.riskTolerance ?? DEFAULT_USER_SETTINGS.riskTolerance),
     timeHorizon: settings?.timeHorizon ?? DEFAULT_USER_SETTINGS.timeHorizon,
     preferredInstruments: settings?.preferredInstruments ?? DEFAULT_USER_SETTINGS.preferredInstruments,
+    language: settings?.language ?? DEFAULT_USER_SETTINGS.language,
     aprMoneyMarketFund: settings?.aprMoneyMarketFund ?? DEFAULT_USER_SETTINGS.aprMoneyMarketFund,
   };
 }

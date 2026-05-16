@@ -631,6 +631,7 @@ function normalizeSettings(settings: Partial<UserSettings> | null): UserSettings
       ? settings.timeHorizon
       : DEFAULT_USER_SETTINGS.timeHorizon,
     preferredInstruments,
+    language: settings?.language === "en" ? "en" : DEFAULT_USER_SETTINGS.language,
     aprMoneyMarketFund: isNonNegativeNumber(settings?.aprMoneyMarketFund)
       ? settings.aprMoneyMarketFund
       : DEFAULT_USER_SETTINGS.aprMoneyMarketFund,

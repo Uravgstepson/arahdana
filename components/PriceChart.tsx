@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import type { PricePoint } from "@/lib/types/investment";
 import { formatRupiah } from "@/lib/utils/format";
+import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
 type ChartPoint = {
@@ -22,7 +23,17 @@ export function PriceChart({
   isMockData: boolean;
   sourceLabel: string;
 }) {
-  const chartData = useMemo(() => buildPriceChartData(prices), [prices]);
+  const performanceProfile = usePerformanceMode();
+  const maxPoints =
+    performanceProfile.mode === "low"
+      ? 80
+      : performanceProfile.mode === "balanced"
+        ? 140
+        : 320;
+  const chartData = useMemo(
+    () => buildPriceChartData(prices, maxPoints),
+    [maxPoints, prices],
+  );
   const hasLimitedHistory = chartData.length > 0 && chartData.length < 20;
   const showSma20 = chartData.length >= 20;
   const showSma50 = chartData.length >= 50;
@@ -66,7 +77,9 @@ export function PriceChart({
                   tickFormatter={(value) => compactRupiah(Number(value))}
                   domain={["auto", "auto"]}
                 />
-                <Tooltip content={<PriceTooltip />} />
+                {performanceProfile.simplifyTooltips ? null : (
+                  <Tooltip content={<PriceTooltip />} />
+                )}
                 <Line
                   type="monotone"
                   dataKey="close"
@@ -74,8 +87,8 @@ export function PriceChart({
                   stroke="#087f5b"
                   strokeWidth={2.4}
                   dot={false}
-                  activeDot={{ r: 4 }}
-                  isAnimationActive={false}
+                  activeDot={performanceProfile.simplifyTooltips ? false : { r: 4 }}
+                  isAnimationActive={!performanceProfile.reduceChartAnimation}
                 />
                 {showSma20 ? (
                   <Line
@@ -86,7 +99,7 @@ export function PriceChart({
                     strokeWidth={1.8}
                     dot={false}
                     connectNulls={false}
-                    isAnimationActive={false}
+                    isAnimationActive={!performanceProfile.reduceChartAnimation}
                   />
                 ) : null}
                 {showSma50 ? (
@@ -98,7 +111,7 @@ export function PriceChart({
                     strokeWidth={1.8}
                     dot={false}
                     connectNulls={false}
-                    isAnimationActive={false}
+                    isAnimationActive={!performanceProfile.reduceChartAnimation}
                   />
                 ) : null}
               </LineChart>
@@ -121,14 +134,21 @@ export function PriceChart({
   );
 }
 
-function buildPriceChartData(prices: PricePoint[]): ChartPoint[] {
+function buildPriceChartData(prices: PricePoint[], maxPoints: number): ChartPoint[] {
   const cleanPrices = prices.filter((price) => Number.isFinite(price.close) && price.close > 0);
+  const sampledPrices =
+    cleanPrices.length > maxPoints
+      ? cleanPrices.filter((_, index) =>
+          index % Math.ceil(cleanPrices.length / maxPoints) === 0 ||
+          index === cleanPrices.length - 1,
+        )
+      : cleanPrices;
 
-  return cleanPrices.map((price, index) => ({
+  return sampledPrices.map((price, index) => ({
     date: price.date,
     close: price.close,
-    sma20: index >= 19 ? rollingAverage(cleanPrices, index, 20) : null,
-    sma50: index >= 49 ? rollingAverage(cleanPrices, index, 50) : null,
+    sma20: index >= 19 ? rollingAverage(sampledPrices, index, 20) : null,
+    sma50: index >= 49 ? rollingAverage(sampledPrices, index, 50) : null,
   }));
 }
 

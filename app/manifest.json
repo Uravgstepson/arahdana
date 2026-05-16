@@ -1,7 +1,7 @@
 {
   "name": "ArahDana",
   "short_name": "ArahDana",
-  "description": "Dasbor pendukung keputusan investasi Indonesia",
+  "description": "Home pendukung keputusan investasi Indonesia",
   "id": "/",
   "start_url": "/dashboard",
   "scope": "/",

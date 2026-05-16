@@ -16,6 +16,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   riskTolerance: 15,
   timeHorizon: "medium",
   preferredInstruments: ["money_market_fund", "bond_fund", "stock"],
+  language: "id",
   aprMoneyMarketFund: 0.05,
   notificationPreferences: DEFAULT_NOTIFICATION_PREFERENCES,
 };

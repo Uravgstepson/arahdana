@@ -7,6 +7,7 @@ import type {
   AlertRule,
   FinancialGoal,
   InvestmentType,
+  LanguagePreference,
   GoalContribution,
   PortfolioItem,
   PortfolioReviewReport,
@@ -53,6 +54,7 @@ type SettingsRow = {
   risk_tolerance: number | null;
   time_horizon: TimeHorizon | null;
   preferred_instruments: InvestmentType[] | null;
+  language?: LanguagePreference | null;
   apr_money_market_fund: number | null;
   notification_preferences?: UserSettings["notificationPreferences"] | null;
 };
@@ -225,7 +227,7 @@ export async function loadCloudSettings(user: User) {
   const supabase = requireSupabase();
   const { data, error } = await supabase
     .from("user_settings")
-    .select("capital,risk_tolerance,time_horizon,preferred_instruments,apr_money_market_fund,notification_preferences")
+    .select("capital,risk_tolerance,time_horizon,preferred_instruments,language,apr_money_market_fund,notification_preferences")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -242,6 +244,7 @@ export async function saveCloudSettings(user: User, settings: UserSettings) {
     risk_tolerance: settings.riskTolerance,
     time_horizon: settings.timeHorizon,
     preferred_instruments: settings.preferredInstruments,
+    language: settings.language ?? DEFAULT_USER_SETTINGS.language,
     apr_money_market_fund: settings.aprMoneyMarketFund ?? DEFAULT_USER_SETTINGS.aprMoneyMarketFund,
     notification_preferences: settings.notificationPreferences ?? DEFAULT_USER_SETTINGS.notificationPreferences,
     updated_at: new Date().toISOString(),
@@ -589,6 +592,7 @@ function rowToSettings(row: SettingsRow): UserSettings {
     riskTolerance: row.risk_tolerance ?? undefined,
     timeHorizon: row.time_horizon ?? undefined,
     preferredInstruments: Array.isArray(row.preferred_instruments) ? row.preferred_instruments : undefined,
+    language: isLanguagePreference(row.language) ? row.language : undefined,
     aprMoneyMarketFund: row.apr_money_market_fund ?? undefined,
     notificationPreferences: row.notification_preferences ?? undefined,
   });
@@ -686,6 +690,7 @@ export function normalizeSettings(settings: Partial<UserSettings> | null | undef
     riskTolerance: clampNumber(settings?.riskTolerance ?? DEFAULT_USER_SETTINGS.riskTolerance, 5, 30),
     timeHorizon: isTimeHorizon(settings?.timeHorizon) ? settings.timeHorizon : DEFAULT_USER_SETTINGS.timeHorizon,
     preferredInstruments,
+    language: isLanguagePreference(settings?.language) ? settings.language : DEFAULT_USER_SETTINGS.language,
     aprMoneyMarketFund:
       typeof settings?.aprMoneyMarketFund === "number" && Number.isFinite(settings.aprMoneyMarketFund)
         ? nonNegativeNumber(settings.aprMoneyMarketFund)
@@ -696,6 +701,10 @@ export function normalizeSettings(settings: Partial<UserSettings> | null | undef
 
 function isTimeHorizon(value: unknown): value is TimeHorizon {
   return value === "short" || value === "medium" || value === "long";
+}
+
+function isLanguagePreference(value: unknown): value is LanguagePreference {
+  return value === "id" || value === "en";
 }
 
 function isInvestmentType(value: unknown): value is InvestmentType {

@@ -4,12 +4,12 @@ import type { ReactNode } from "react";
 export function LoadingState({ title = "Memuat data", message = "Sebentar, ArahDana sedang menyiapkan tampilan." }) {
   return (
     <section className="rounded-[1.6rem] border border-stone-200 bg-white p-6 shadow-sm">
-      <div className="h-4 w-28 animate-pulse rounded-full bg-stone-200" />
-      <div className="mt-5 h-8 w-64 max-w-full animate-pulse rounded-full bg-stone-200" />
+      <div className="h-4 w-28 rounded-full bg-stone-200 motion-safe:animate-pulse" />
+      <div className="mt-5 h-8 w-64 max-w-full rounded-full bg-stone-200 motion-safe:animate-pulse" />
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="h-20 animate-pulse rounded-[1.2rem] bg-stone-100" />
-        <div className="h-20 animate-pulse rounded-[1.2rem] bg-stone-100" />
-        <div className="h-20 animate-pulse rounded-[1.2rem] bg-stone-100" />
+        <div className="h-20 rounded-[1.2rem] bg-stone-100 motion-safe:animate-pulse" />
+        <div className="h-20 rounded-[1.2rem] bg-stone-100 motion-safe:animate-pulse" />
+        <div className="h-20 rounded-[1.2rem] bg-stone-100 motion-safe:animate-pulse" />
       </div>
       <p className="sr-only">
         {title}. {message}
