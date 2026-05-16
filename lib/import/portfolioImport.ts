@@ -1,5 +1,6 @@
 import type { InvestmentType, PortfolioItem, RiskCategory } from "@/lib/types/investment";
 import { nonNegativeNumber } from "@/lib/utils/format";
+import { validateNonNegativeNumber, validateTicker } from "@/lib/validation";
 
 export type ImportedPortfolioItem = Omit<PortfolioItem, "id">;
 
@@ -131,11 +132,35 @@ export function parsePortfolioImport(input: string): PortfolioImportResult {
     const source = record.source?.trim();
     const sourceText = `${source ?? ""} ${name ?? ""} ${record.type ?? ""}`.toLowerCase();
     const type = inferInvestmentType(record.type, name, record.ticker);
-    const quantity = nonNegativeNumber(parseFlexibleNumber(record.quantity));
-    const buyValue = nonNegativeNumber(parseFlexibleNumber(record.buyValue));
-    const currentValue = nonNegativeNumber(parseFlexibleNumber(record.currentValue));
-    let buyPrice = nonNegativeNumber(parseFlexibleNumber(record.buyPrice));
-    let currentPrice = nonNegativeNumber(parseFlexibleNumber(record.currentPrice));
+    const rawQuantity = parseFlexibleNumber(record.quantity);
+    const rawBuyValue = parseFlexibleNumber(record.buyValue);
+    const rawCurrentValue = parseFlexibleNumber(record.currentValue);
+    const rawBuyPrice = parseFlexibleNumber(record.buyPrice);
+    const rawCurrentPrice = parseFlexibleNumber(record.currentPrice);
+    const numericValidation = [
+      validateImportedNumber(rawQuantity, "jumlah/unit", rowNumber, record.quantity),
+      validateImportedNumber(rawBuyValue, "modal", rowNumber, record.buyValue),
+      validateImportedNumber(rawCurrentValue, "nilai kini", rowNumber, record.currentValue),
+      validateImportedNumber(rawBuyPrice, "harga beli", rowNumber, record.buyPrice),
+      validateImportedNumber(rawCurrentPrice, "harga kini", rowNumber, record.currentPrice),
+    ].filter(Boolean);
+
+    if (numericValidation.length > 0) {
+      errors.push(...numericValidation);
+      return;
+    }
+
+    const tickerValidation = validateTicker(record.ticker ?? "", { optional: true });
+    if (tickerValidation) {
+      errors.push(`Baris ${rowNumber}: ${tickerValidation}`);
+      return;
+    }
+
+    const quantity = nonNegativeNumber(rawQuantity);
+    const buyValue = nonNegativeNumber(rawBuyValue);
+    const currentValue = nonNegativeNumber(rawCurrentValue);
+    let buyPrice = nonNegativeNumber(rawBuyPrice);
+    let currentPrice = nonNegativeNumber(rawCurrentPrice);
     const normalizedQuantity = quantity > 0 ? quantity : currentValue > 0 ? 1 : 0;
 
     if (buyValue > 0 && normalizedQuantity > 0) {
@@ -312,6 +337,17 @@ function parseFlexibleNumber(value?: string) {
   }
 
   return Number(normalized);
+}
+
+function validateImportedNumber(
+  value: number,
+  label: string,
+  rowNumber: number,
+  rawValue?: string,
+) {
+  if (!rawValue?.trim()) return "";
+  const error = validateNonNegativeNumber(value, label);
+  return error ? `Baris ${rowNumber}: ${error}` : "";
 }
 
 function inferInvestmentType(type?: string, name?: string, ticker?: string): InvestmentType {

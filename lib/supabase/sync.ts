@@ -4,7 +4,10 @@ import type { User } from "@supabase/supabase-js";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type {
+  AlertRule,
+  FinancialGoal,
   InvestmentType,
+  GoalContribution,
   PortfolioItem,
   RiskCategory,
   SavedAnalysisResult,
@@ -14,6 +17,7 @@ import type {
 } from "@/lib/types/investment";
 import { requireSupabase } from "@/lib/supabase/auth";
 import { clampNumber, nonNegativeNumber } from "@/lib/utils/format";
+import { normalizeNotificationPreferences } from "@/lib/notifications/notificationSystem";
 
 type HoldingRow = {
   id: string;
@@ -49,6 +53,7 @@ type SettingsRow = {
   time_horizon: TimeHorizon | null;
   preferred_instruments: InvestmentType[] | null;
   apr_money_market_fund: number | null;
+  notification_preferences?: UserSettings["notificationPreferences"] | null;
 };
 
 type AnalysisRow = {
@@ -60,6 +65,58 @@ type AnalysisRow = {
   result: SavedAnalysisResult["result"];
   price_source_label: string;
   is_mock_data: boolean;
+  created_at: string;
+};
+
+type GoalRow = {
+  id: string;
+  local_id: string | null;
+  category: FinancialGoal["category"];
+  name: string;
+  target_amount: number;
+  target_date: string;
+  monthly_contribution: number;
+  risk_tolerance: number;
+  risk_profile: FinancialGoal["riskProfile"];
+  preferred_instruments: InvestmentType[] | null;
+  linked_holding_ids: string[] | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type GoalContributionRow = {
+  id: string;
+  local_id: string | null;
+  goal_local_id: string;
+  amount: number;
+  contribution_month: string;
+  note: string | null;
+  created_at: string;
+};
+
+type AlertRuleRow = {
+  id: string;
+  local_id: string | null;
+  name: string;
+  ticker: string | null;
+  instrument_name: string | null;
+  alert_type: AlertRule["alertType"];
+  target_price: number | null;
+  buy_zone_from: number | null;
+  buy_zone_to: number | null;
+  risk_threshold: number | null;
+  volatility_threshold: number | null;
+  loss_threshold: number | null;
+  allocation_threshold: number | null;
+  enabled: boolean;
+  notes: string | null;
+  source_type: AlertRule["sourceType"];
+  source_id: string | null;
+  last_checked_at: string | null;
+  last_triggered_at: string | null;
+  last_check_status: AlertRule["lastCheckStatus"] | null;
+  last_check_message: string | null;
+  last_observed_verdict: AlertRule["lastObservedVerdict"] | null;
   created_at: string;
 };
 
@@ -156,7 +213,7 @@ export async function loadCloudSettings(user: User) {
   const supabase = requireSupabase();
   const { data, error } = await supabase
     .from("user_settings")
-    .select("capital,risk_tolerance,time_horizon,preferred_instruments,apr_money_market_fund")
+    .select("capital,risk_tolerance,time_horizon,preferred_instruments,apr_money_market_fund,notification_preferences")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -174,6 +231,7 @@ export async function saveCloudSettings(user: User, settings: UserSettings) {
     time_horizon: settings.timeHorizon,
     preferred_instruments: settings.preferredInstruments,
     apr_money_market_fund: settings.aprMoneyMarketFund ?? DEFAULT_USER_SETTINGS.aprMoneyMarketFund,
+    notification_preferences: settings.notificationPreferences ?? DEFAULT_USER_SETTINGS.notificationPreferences,
     updated_at: new Date().toISOString(),
   });
   if (error) throw error;
@@ -234,17 +292,153 @@ export async function saveCloudAnalysisResults(user: User, items: SavedAnalysisR
   return { count: rows.length };
 }
 
+export async function loadCloudGoals(user: User) {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from("financial_goals")
+    .select("id,local_id,category,name,target_amount,target_date,monthly_contribution,risk_tolerance,risk_profile,preferred_instruments,linked_holding_ids,created_at,updated_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return ((data ?? []) as GoalRow[]).map(rowToGoal);
+}
+
+export async function saveCloudGoals(user: User, items: FinancialGoal[]) {
+  const supabase = requireSupabase();
+  const safeItems = normalizeGoalsForCloud(items);
+
+  const { error: deleteError } = await supabase.from("financial_goals").delete().eq("user_id", user.id);
+  if (deleteError) throw deleteError;
+
+  if (safeItems.length === 0) return { count: 0 };
+
+  const rows = safeItems.map((goal) => ({
+    user_id: user.id,
+    local_id: goal.id,
+    category: goal.category,
+    name: safeText(goal.name, "Tujuan finansial"),
+    target_amount: goal.targetAmount,
+    target_date: safeDate(goal.targetDate),
+    monthly_contribution: goal.monthlyContribution,
+    risk_tolerance: clampNumber(goal.riskTolerance, 5, 30),
+    risk_profile: goal.riskProfile,
+    preferred_instruments: goal.preferredInstruments,
+    linked_holding_ids: goal.linkedHoldingIds,
+    created_at: safeTimestamp(goal.createdAt) ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from("financial_goals").insert(rows);
+  if (error) throw error;
+  return { count: rows.length };
+}
+
+export async function loadCloudGoalContributions(user: User) {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from("goal_contributions")
+    .select("id,local_id,goal_local_id,amount,contribution_month,note,created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return ((data ?? []) as GoalContributionRow[]).map(rowToGoalContribution);
+}
+
+export async function saveCloudGoalContributions(user: User, items: GoalContribution[]) {
+  const supabase = requireSupabase();
+  const safeItems = normalizeGoalContributionsForCloud(items);
+
+  const { error: deleteError } = await supabase.from("goal_contributions").delete().eq("user_id", user.id);
+  if (deleteError) throw deleteError;
+
+  if (safeItems.length === 0) return { count: 0 };
+
+  const rows = safeItems.map((item) => ({
+    user_id: user.id,
+    local_id: item.id,
+    goal_local_id: item.goalId,
+    amount: item.amount,
+    contribution_month: safeMonth(item.contributionMonth),
+    note: nullableText(item.note),
+    created_at: safeTimestamp(item.createdAt) ?? new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from("goal_contributions").insert(rows);
+  if (error) throw error;
+  return { count: rows.length };
+}
+
+export async function loadCloudAlertRules(user: User) {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from("alert_rules")
+    .select("id,local_id,name,ticker,instrument_name,alert_type,target_price,buy_zone_from,buy_zone_to,risk_threshold,volatility_threshold,loss_threshold,allocation_threshold,enabled,notes,source_type,source_id,last_checked_at,last_triggered_at,last_check_status,last_check_message,last_observed_verdict,created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return ((data ?? []) as AlertRuleRow[]).map(rowToAlertRule);
+}
+
+export async function saveCloudAlertRules(user: User, items: AlertRule[]) {
+  const supabase = requireSupabase();
+  const safeItems = normalizeAlertRulesForCloud(items);
+  const { error: deleteError } = await supabase.from("alert_rules").delete().eq("user_id", user.id);
+  if (deleteError) throw deleteError;
+
+  if (safeItems.length === 0) return { count: 0 };
+
+  const rows = safeItems.map((item) => ({
+    user_id: user.id,
+    local_id: item.id,
+    name: safeText(item.name, "Alert"),
+    ticker: nullableText(item.ticker),
+    instrument_name: nullableText(item.instrumentName),
+    alert_type: item.alertType,
+    target_price: nullableNumber(item.targetPrice),
+    buy_zone_from: nullableNumber(item.buyZoneFrom),
+    buy_zone_to: nullableNumber(item.buyZoneTo),
+    risk_threshold: nullableNumber(item.riskThreshold),
+    volatility_threshold: nullableNumber(item.volatilityThreshold),
+    loss_threshold: nullableNumber(item.lossThreshold),
+    allocation_threshold: nullableNumber(item.allocationThreshold),
+    enabled: item.enabled,
+    notes: nullableText(item.notes),
+    source_type: item.sourceType,
+    source_id: nullableText(item.sourceId),
+    last_checked_at: safeTimestamp(item.lastCheckedAt),
+    last_triggered_at: safeTimestamp(item.lastTriggeredAt),
+    last_check_status: isAlertCheckStatus(item.lastCheckStatus) ? item.lastCheckStatus : null,
+    last_check_message: nullableText(item.lastCheckMessage),
+    last_observed_verdict: isVerdict(item.lastObservedVerdict) ? item.lastObservedVerdict : null,
+    created_at: safeTimestamp(item.createdAt) ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from("alert_rules").insert(rows);
+  if (error) throw error;
+  return { count: rows.length };
+}
+
 export async function syncLocalDataToCloud(user: User) {
   const portfolio = localArahDanaStorage.readPortfolio() ?? [];
   const watchlist = localArahDanaStorage.readWatchlist() ?? [];
   const settings = normalizeSettings(localArahDanaStorage.readSettings());
   const analysisResults = localArahDanaStorage.readAnalysisResults() ?? [];
+  const goals = localArahDanaStorage.readGoals() ?? [];
+  const goalContributions = localArahDanaStorage.readGoalContributions() ?? [];
+  const alertRules = localArahDanaStorage.readAlertRules() ?? [];
 
   const results = await Promise.allSettled([
     saveCloudPortfolio(user, portfolio),
     saveCloudWatchlist(user, watchlist),
     saveCloudSettings(user, settings).then(() => ({ count: 1 })),
     saveCloudAnalysisResults(user, analysisResults),
+    saveCloudGoals(user, goals),
+    saveCloudGoalContributions(user, goalContributions),
+    saveCloudAlertRules(user, alertRules),
   ]);
 
   const failures = results
@@ -264,10 +458,21 @@ export async function syncLocalDataToCloud(user: User) {
     portfolioCount: results[0].status === "fulfilled" ? results[0].value.count : 0,
     watchlistCount: results[1].status === "fulfilled" ? results[1].value.count : 0,
     analysisCount: results[3].status === "fulfilled" ? results[3].value.count : 0,
+    goalCount: results[4].status === "fulfilled" ? results[4].value.count : 0,
+    goalContributionCount: results[5].status === "fulfilled" ? results[5].value.count : 0,
+    alertRuleCount: results[6].status === "fulfilled" ? results[6].value.count : 0,
   };
 }
 
-const syncStepLabels = ["Portofolio", "Watchlist", "Settings", "Hasil analisis"];
+const syncStepLabels = [
+  "Portofolio",
+  "Watchlist",
+  "Settings",
+  "Hasil analisis",
+  "Tujuan finansial",
+  "Kontribusi tujuan",
+  "Alert",
+];
 
 async function getOrCreateDefaultPortfolioId(user: User) {
   const supabase = requireSupabase();
@@ -332,6 +537,7 @@ function rowToSettings(row: SettingsRow): UserSettings {
     timeHorizon: row.time_horizon ?? undefined,
     preferredInstruments: Array.isArray(row.preferred_instruments) ? row.preferred_instruments : undefined,
     aprMoneyMarketFund: row.apr_money_market_fund ?? undefined,
+    notificationPreferences: row.notification_preferences ?? undefined,
   });
 }
 
@@ -346,6 +552,61 @@ function rowToSavedAnalysis(row: AnalysisRow): SavedAnalysisResult {
     isMockData: row.is_mock_data,
     createdAt: row.created_at,
   };
+}
+
+function rowToGoal(row: GoalRow): FinancialGoal {
+  return normalizeGoal({
+    id: row.local_id ?? row.id,
+    category: row.category,
+    name: row.name,
+    targetAmount: nonNegativeNumber(row.target_amount),
+    targetDate: row.target_date,
+    monthlyContribution: nonNegativeNumber(row.monthly_contribution),
+    riskTolerance: clampNumber(row.risk_tolerance, 5, 30),
+    riskProfile: row.risk_profile,
+    preferredInstruments: Array.isArray(row.preferred_instruments) ? row.preferred_instruments : [],
+    linkedHoldingIds: Array.isArray(row.linked_holding_ids) ? row.linked_holding_ids : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+function rowToGoalContribution(row: GoalContributionRow): GoalContribution {
+  return normalizeGoalContribution({
+    id: row.local_id ?? row.id,
+    goalId: row.goal_local_id,
+    amount: nonNegativeNumber(row.amount),
+    contributionMonth: row.contribution_month,
+    note: row.note ?? "",
+    createdAt: row.created_at,
+  });
+}
+
+function rowToAlertRule(row: AlertRuleRow): AlertRule {
+  return normalizeAlertRule({
+    id: row.local_id ?? row.id,
+    name: row.name,
+    ticker: row.ticker ?? "",
+    instrumentName: row.instrument_name ?? "",
+    alertType: row.alert_type,
+    targetPrice: row.target_price ?? undefined,
+    buyZoneFrom: row.buy_zone_from ?? undefined,
+    buyZoneTo: row.buy_zone_to ?? undefined,
+    riskThreshold: row.risk_threshold ?? undefined,
+    volatilityThreshold: row.volatility_threshold ?? undefined,
+    lossThreshold: row.loss_threshold ?? undefined,
+    allocationThreshold: row.allocation_threshold ?? undefined,
+    enabled: row.enabled,
+    notes: row.notes ?? "",
+    sourceType: row.source_type,
+    sourceId: row.source_id ?? undefined,
+    lastCheckedAt: row.last_checked_at ?? undefined,
+    lastTriggeredAt: row.last_triggered_at ?? undefined,
+    lastCheckStatus: row.last_check_status ?? undefined,
+    lastCheckMessage: row.last_check_message ?? undefined,
+    lastObservedVerdict: row.last_observed_verdict ?? undefined,
+    createdAt: row.created_at,
+  });
 }
 
 export function normalizeSettings(settings: Partial<UserSettings> | null | undefined): UserSettings {
@@ -364,6 +625,7 @@ export function normalizeSettings(settings: Partial<UserSettings> | null | undef
       typeof settings?.aprMoneyMarketFund === "number" && Number.isFinite(settings.aprMoneyMarketFund)
         ? nonNegativeNumber(settings.aprMoneyMarketFund)
         : DEFAULT_USER_SETTINGS.aprMoneyMarketFund,
+    notificationPreferences: normalizeNotificationPreferences(settings?.notificationPreferences),
   };
 }
 
@@ -439,6 +701,92 @@ function normalizeAnalysisResultForCloud(item: SavedAnalysisResult, seenIds: Set
   };
 }
 
+function normalizeGoalsForCloud(items: FinancialGoal[]) {
+  const seenIds = new Set<string>();
+  return items.map((item) => normalizeGoal({ ...item, id: uniqueLocalId(item.id, seenIds) }));
+}
+
+function normalizeGoalContributionsForCloud(items: GoalContribution[]) {
+  const seenIds = new Set<string>();
+  return items.map((item) =>
+    normalizeGoalContribution({ ...item, id: uniqueLocalId(item.id, seenIds) }),
+  );
+}
+
+function normalizeAlertRulesForCloud(items: AlertRule[]) {
+  const seenIds = new Set<string>();
+  return items.map((item) => normalizeAlertRule({ ...item, id: uniqueLocalId(item.id, seenIds) }));
+}
+
+function normalizeGoal(goal: FinancialGoal): FinancialGoal {
+  const riskTolerance = clampNumber(goal.riskTolerance, 5, 30);
+  return {
+    ...goal,
+    id: safeText(goal.id, crypto.randomUUID()),
+    category: isGoalCategory(goal.category) ? goal.category : "custom",
+    name: safeText(goal.name, "Tujuan finansial"),
+    targetAmount: nonNegativeNumber(goal.targetAmount),
+    targetDate: safeDate(goal.targetDate),
+    monthlyContribution: nonNegativeNumber(goal.monthlyContribution),
+    riskTolerance,
+    riskProfile: isGoalRiskProfile(goal.riskProfile)
+      ? goal.riskProfile
+      : riskTolerance <= 10
+        ? "defensive"
+        : riskTolerance <= 20
+          ? "balanced"
+          : "aggressive",
+    preferredInstruments: Array.isArray(goal.preferredInstruments)
+      ? goal.preferredInstruments.filter(isInvestmentType)
+      : [],
+    linkedHoldingIds: Array.isArray(goal.linkedHoldingIds)
+      ? goal.linkedHoldingIds.filter((value) => typeof value === "string" && value.trim())
+      : [],
+    createdAt: safeTimestamp(goal.createdAt) ?? new Date().toISOString(),
+    updatedAt: safeTimestamp(goal.updatedAt) ?? new Date().toISOString(),
+  };
+}
+
+function normalizeGoalContribution(item: GoalContribution): GoalContribution {
+  return {
+    ...item,
+    id: safeText(item.id, crypto.randomUUID()),
+    goalId: safeText(item.goalId, ""),
+    amount: nonNegativeNumber(item.amount),
+    contributionMonth: safeMonth(item.contributionMonth),
+    note: nullableText(item.note) ?? "",
+    createdAt: safeTimestamp(item.createdAt) ?? new Date().toISOString(),
+  };
+}
+
+function normalizeAlertRule(item: AlertRule): AlertRule {
+  return {
+    ...item,
+    id: safeText(item.id, crypto.randomUUID()),
+    name: safeText(item.name, "Alert"),
+    ticker: item.ticker?.trim() ?? "",
+    instrumentName: item.instrumentName?.trim() ?? "",
+    alertType: isAlertType(item.alertType) ? item.alertType : "price_below",
+    targetPrice: optionalNonNegativeNumber(item.targetPrice),
+    buyZoneFrom: optionalNonNegativeNumber(item.buyZoneFrom),
+    buyZoneTo: optionalNonNegativeNumber(item.buyZoneTo),
+    riskThreshold: optionalNonNegativeNumber(item.riskThreshold),
+    volatilityThreshold: optionalNonNegativeNumber(item.volatilityThreshold),
+    lossThreshold: optionalNonNegativeNumber(item.lossThreshold),
+    allocationThreshold: optionalNonNegativeNumber(item.allocationThreshold),
+    enabled: Boolean(item.enabled),
+    notes: item.notes ?? "",
+    sourceType: isAlertSourceType(item.sourceType) ? item.sourceType : "manual",
+    sourceId: item.sourceId?.trim() || undefined,
+    lastCheckedAt: safeTimestamp(item.lastCheckedAt) ?? undefined,
+    lastTriggeredAt: safeTimestamp(item.lastTriggeredAt) ?? undefined,
+    lastCheckStatus: isAlertCheckStatus(item.lastCheckStatus) ? item.lastCheckStatus : undefined,
+    lastCheckMessage: item.lastCheckMessage ?? undefined,
+    lastObservedVerdict: isVerdict(item.lastObservedVerdict) ? item.lastObservedVerdict : undefined,
+    createdAt: safeTimestamp(item.createdAt) ?? new Date().toISOString(),
+  };
+}
+
 function uniqueLocalId(value: string | undefined, seenIds: Set<string>) {
   let id = safeText(value, crypto.randomUUID());
   while (seenIds.has(id)) {
@@ -456,6 +804,14 @@ function nullableText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function nullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? nonNegativeNumber(value) : null;
+}
+
+function optionalNonNegativeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? nonNegativeNumber(value) : undefined;
+}
+
 function safeDate(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {
     return new Date().toISOString().slice(0, 10);
@@ -467,6 +823,11 @@ function safeDate(value: unknown) {
   }
 
   return date.toISOString().slice(0, 10);
+}
+
+function safeMonth(value: unknown) {
+  if (typeof value === "string" && /^\d{4}-\d{2}$/.test(value)) return value;
+  return new Date().toISOString().slice(0, 7);
 }
 
 function safeTimestamp(value: unknown) {
@@ -483,8 +844,50 @@ function isRiskCategory(value: unknown): value is RiskCategory {
   return value === "low" || value === "medium" || value === "high";
 }
 
+function isVerdict(value: unknown): value is AlertRule["lastObservedVerdict"] {
+  return value === "BUY" || value === "WAIT" || value === "AVOID";
+}
+
+function isAlertCheckStatus(value: unknown): value is AlertRule["lastCheckStatus"] {
+  return value === "ok" || value === "triggered" || value === "error";
+}
+
+function isAlertSourceType(value: unknown): value is AlertRule["sourceType"] {
+  return value === "watchlist" || value === "portfolio" || value === "manual";
+}
+
+function isAlertType(value: unknown): value is AlertRule["alertType"] {
+  return (
+    value === "price_below" ||
+    value === "price_above" ||
+    value === "near_buy_zone" ||
+    value === "verdict_buy" ||
+    value === "verdict_avoid" ||
+    value === "high_volatility" ||
+    value === "risk_score_worsens" ||
+    value === "portfolio_loss" ||
+    value === "concentration_risk"
+  );
+}
+
 function isWatchlistStatus(value: unknown): value is WatchlistItem["status"] {
   return value === "watching" || value === "waiting" || value === "avoid" || value === "bought";
+}
+
+function isGoalCategory(value: unknown): value is FinancialGoal["category"] {
+  return (
+    value === "emergency_fund" ||
+    value === "education" ||
+    value === "motorcycle" ||
+    value === "car" ||
+    value === "house" ||
+    value === "retirement" ||
+    value === "custom"
+  );
+}
+
+function isGoalRiskProfile(value: unknown): value is FinancialGoal["riskProfile"] {
+  return value === "defensive" || value === "balanced" || value === "aggressive";
 }
 
 function formatSupabaseError(error: unknown) {

@@ -48,8 +48,6 @@ export function AnalyzerResult({
 
   return (
     <section className="space-y-5">
-      <PriceChart prices={prices} isMockData={isMockData} sourceLabel={dataSourceLabel} />
-
       <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -86,6 +84,19 @@ export function AnalyzerResult({
           <p className="mt-1">{mainRiskWarning}</p>
         </div>
       </div>
+
+      <details className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <summary className="cursor-pointer text-sm font-semibold text-stone-950">
+          Grafik harga
+        </summary>
+        <div className="mt-4">
+          <PriceChart
+            prices={prices}
+            isMockData={isMockData}
+            sourceLabel={dataSourceLabel}
+          />
+        </div>
+      </details>
 
       <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -157,8 +168,12 @@ export function AnalyzerResult({
         </p>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
-        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+      <details className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <summary className="cursor-pointer text-sm font-semibold text-stone-950">
+          Sinyal dan detail teknikal
+        </summary>
+        <div className="mt-5 grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+        <div className="rounded-lg bg-stone-100 p-5">
           <h2 className="text-lg font-semibold text-stone-950">Sinyal tren</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
             <Metric label="Close terbaru" value={formatRupiah(latestClose)} />
@@ -171,9 +186,9 @@ export function AnalyzerResult({
           </div>
         </div>
         <ScoreBreakdownChart result={result} />
-      </div>
+        </div>
 
-      <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="mt-5 rounded-lg bg-stone-100 p-5">
         <h2 className="text-lg font-semibold text-stone-950">Analisis detail</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Metric label="Tren" value={result.trend.label} helper={`Skor tren ${result.trend.score}/100`} />
@@ -223,6 +238,7 @@ export function AnalyzerResult({
           <p className="mt-2 text-sm leading-6 text-stone-600">{result.explanation}</p>
         </div>
       </div>
+      </details>
     </section>
   );
 }

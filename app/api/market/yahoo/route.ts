@@ -2,12 +2,26 @@ import { NextResponse } from "next/server";
 import { normalizeMarketTicker } from "@/lib/market/tickerUniverse";
 import { toYahooFinanceSymbol } from "@/lib/market/tickerSymbols";
 import { fetchYahooChart, MarketDataError } from "@/lib/providers/yahoo";
+import { validateTicker } from "@/lib/validation";
 
 export const revalidate = 900;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const ticker = normalizeMarketTicker(searchParams.get("ticker") || "BBCA:IDX");
+  const rawTicker = searchParams.get("ticker") || "BBCA:IDX";
+  const tickerValidation = validateTicker(rawTicker);
+  if (tickerValidation) {
+    return NextResponse.json(
+      {
+        source: "Market Data API",
+        ticker: rawTicker,
+        error: "Parameter ticker tidak valid.",
+        message: tickerValidation,
+      },
+      { status: 400 },
+    );
+  }
+  const ticker = normalizeMarketTicker(rawTicker);
   const range = searchParams.get("range") || "1y";
   const interval = searchParams.get("interval") || "1d";
   const live = searchParams.get("live") === "1";

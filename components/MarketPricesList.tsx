@@ -80,16 +80,12 @@ export function MarketPricesList() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+      <div className="rounded-[1.6rem] border border-stone-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-stone-950">
-              Pasar & Analisis
-            </h2>
+            <h2 className="text-lg font-semibold text-stone-950">Pasar</h2>
             <p className="mt-1 text-sm leading-6 text-stone-600">
-              Kategori market dengan grafik live-ish untuk ticker Yahoo dan
-              simulasi NAV untuk produk reksadana sampai sumber NAV publik
-              disambungkan.
+              Ringkasan harga untuk bahan review, bukan ajakan trading cepat.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -151,7 +147,7 @@ function MarketCard({ market }: { market: MarketPrice }) {
   const verdictClass = verdictColor(market.analysis?.verdict);
 
   return (
-    <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm transition hover:shadow-md">
+    <article className="rounded-[1.35rem] border border-stone-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -321,7 +317,7 @@ function Sparkline({ prices, tone }: { prices: PricePoint[]; tone: "good" | "bad
   const stroke = tone === "good" ? "#047857" : "#be123c";
 
   return (
-    <svg className="mt-4 h-24 w-full overflow-visible" viewBox="0 0 240 80" role="img" aria-label="Grafik harga">
+    <svg className="pointer-events-none mt-4 h-20 w-full overflow-visible" viewBox="0 0 240 80" role="img" aria-label="Grafik harga">
       <path d="M0 72 C60 68 120 74 240 68" fill="none" stroke="rgba(148,163,184,0.22)" strokeWidth="1" />
       <polyline
         points={points}

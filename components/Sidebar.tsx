@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
@@ -9,7 +10,20 @@ type NavItem = {
   href: string;
   label: string;
   shortLabel: string;
-  icon: "home" | "portfolio" | "analyzer" | "watchlist" | "settings" | "market" | "integrations";
+  icon:
+    | "home"
+    | "portfolio"
+    | "goals"
+    | "analyzer"
+    | "watchlist"
+    | "settings"
+    | "market"
+    | "integrations"
+    | "info"
+    | "notes"
+    | "feedback"
+    | "notifications"
+    | "alerts";
 };
 
 const primaryNav: NavItem[] = [
@@ -21,8 +35,14 @@ const primaryNav: NavItem[] = [
 ];
 
 const desktopExtras: NavItem[] = [
+  { href: "/goals", label: "Tujuan", shortLabel: "Tujuan", icon: "goals" },
+  { href: "/alerts", label: "Alerts", shortLabel: "Alerts", icon: "alerts" },
   { href: "/market-prices", label: "Harga Pasar", shortLabel: "Pasar", icon: "market" },
+  { href: "/notifications", label: "Notifikasi", shortLabel: "Notif", icon: "notifications" },
   { href: "/integrations", label: "Integrasi", shortLabel: "Integrasi", icon: "integrations" },
+  { href: "/onboarding", label: "Onboarding", shortLabel: "Mulai", icon: "info" },
+  { href: "/changelog", label: "Changelog", shortLabel: "Rilis", icon: "notes" },
+  { href: "/feedback", label: "Feedback", shortLabel: "Saran", icon: "feedback" },
 ];
 
 export function Sidebar() {
@@ -34,10 +54,17 @@ export function Sidebar() {
       <aside className="motion-nav fixed inset-y-5 left-5 z-50 hidden w-[5.5rem] flex-col items-center rounded-[1.8rem] border border-white/45 bg-white/58 px-2 py-4 shadow-sm backdrop-blur-3xl lg:flex">
         <Link
           href="/dashboard"
-          className="grid h-12 w-12 place-items-center rounded-[1.2rem] bg-emerald-700 text-sm font-bold text-white shadow-sm"
+          className="grid h-12 w-12 place-items-center overflow-hidden rounded-[1.2rem] bg-white shadow-sm ring-1 ring-emerald-100"
           aria-label="ArahDana dashboard"
         >
-          AD
+          <Image
+            src="/icons/arahdana-logo.png"
+            alt=""
+            width={48}
+            height={48}
+            className="h-full w-full object-cover"
+            priority
+          />
         </Link>
 
         <nav className="mt-7 flex flex-1 flex-col items-center gap-2" aria-label="Navigasi utama">
@@ -116,6 +143,13 @@ function NavGlyph({ icon }: { icon: NavItem["icon"] }) {
           <path {...common} d="M8 14h8" />
         </>
       ) : null}
+      {icon === "goals" ? (
+        <>
+          <path {...common} d="M12 20s7-4.5 7-10a4 4 0 0 0-7-2.6A4 4 0 0 0 5 10c0 5.5 7 10 7 10Z" />
+          <path {...common} d="M12 10v5" />
+          <path {...common} d="M9.5 12.5h5" />
+        </>
+      ) : null}
       {icon === "analyzer" ? (
         <>
           <path {...common} d="M5 18V8" />
@@ -151,6 +185,41 @@ function NavGlyph({ icon }: { icon: NavItem["icon"] }) {
           <path {...common} d="M16 12h4" />
           <path {...common} d="M12 4v4" />
           <path {...common} d="M12 16v4" />
+        </>
+      ) : null}
+      {icon === "info" ? (
+        <>
+          <circle {...common} cx="12" cy="12" r="8" />
+          <path {...common} d="M12 11v5" />
+          <path {...common} d="M12 8h.01" />
+        </>
+      ) : null}
+      {icon === "notes" ? (
+        <>
+          <path {...common} d="M7 4h8l3 3v13H7z" />
+          <path {...common} d="M15 4v4h4" />
+          <path {...common} d="M10 12h5" />
+          <path {...common} d="M10 16h5" />
+        </>
+      ) : null}
+      {icon === "feedback" ? (
+        <>
+          <path {...common} d="M5 6h14v10H9l-4 4z" />
+          <path {...common} d="M9 10h6" />
+          <path {...common} d="M9 13h4" />
+        </>
+      ) : null}
+      {icon === "notifications" ? (
+        <>
+          <path {...common} d="M7 10a5 5 0 0 1 10 0c0 4 2 5 2 5H5s2-1 2-5" />
+          <path {...common} d="M10 18a2 2 0 0 0 4 0" />
+        </>
+      ) : null}
+      {icon === "alerts" ? (
+        <>
+          <path {...common} d="M12 4v6" />
+          <path {...common} d="M12 14h.01" />
+          <path {...common} d="M5 20h14l-7-16z" />
         </>
       ) : null}
     </svg>

@@ -133,4 +133,121 @@ export type UserSettings = {
    * Nilai contoh: 0.05 = 5% per tahun.
    */
   aprMoneyMarketFund?: number;
+  notificationPreferences?: NotificationPreferences;
+};
+
+export type FinancialGoalCategory =
+  | "emergency_fund"
+  | "education"
+  | "motorcycle"
+  | "car"
+  | "house"
+  | "retirement"
+  | "custom";
+
+export type FinancialGoalRiskProfile = "defensive" | "balanced" | "aggressive";
+
+export type FinancialGoal = {
+  id: string;
+  category: FinancialGoalCategory;
+  name: string;
+  targetAmount: number;
+  targetDate: string;
+  monthlyContribution: number;
+  riskTolerance: number;
+  riskProfile: FinancialGoalRiskProfile;
+  preferredInstruments: InvestmentType[];
+  linkedHoldingIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GoalContribution = {
+  id: string;
+  goalId: string;
+  amount: number;
+  contributionMonth: string;
+  note?: string;
+  createdAt: string;
+};
+
+export type NotificationType =
+  | "reminder"
+  | "risk"
+  | "watchlist"
+  | "goal"
+  | "portfolio"
+  | "market";
+
+export type ReminderFrequency = "daily" | "weekly" | "monthly";
+
+export type AppNotification = {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  createdAt: string;
+  readAt?: string;
+  sourceId?: string;
+};
+
+export type NotificationPreferences = {
+  enabled: boolean;
+  browserEnabled: boolean;
+  reminderFrequency: ReminderFrequency;
+  enabledTypes: NotificationType[];
+  quietMode: boolean;
+  mobileVibration: boolean;
+  weeklySummary: boolean;
+  lastGeneratedAt?: Partial<Record<NotificationType | "weekly_summary", string>>;
+};
+
+export type AlertType =
+  | "price_below"
+  | "price_above"
+  | "near_buy_zone"
+  | "verdict_buy"
+  | "verdict_avoid"
+  | "high_volatility"
+  | "risk_score_worsens"
+  | "portfolio_loss"
+  | "concentration_risk";
+
+export type AlertCheckStatus = "ok" | "triggered" | "error";
+
+export type AlertRule = {
+  id: string;
+  name: string;
+  ticker?: string;
+  instrumentName?: string;
+  alertType: AlertType;
+  targetPrice?: number;
+  buyZoneFrom?: number;
+  buyZoneTo?: number;
+  riskThreshold?: number;
+  volatilityThreshold?: number;
+  lossThreshold?: number;
+  allocationThreshold?: number;
+  enabled: boolean;
+  notes?: string;
+  createdAt: string;
+  lastCheckedAt?: string;
+  lastTriggeredAt?: string;
+  lastCheckStatus?: AlertCheckStatus;
+  lastCheckMessage?: string;
+  lastObservedVerdict?: Verdict;
+  sourceType: "watchlist" | "portfolio" | "manual";
+  sourceId?: string;
+};
+
+export type AlertCheckResult = {
+  ruleId: string;
+  triggered: boolean;
+  currentValue?: number;
+  threshold?: number;
+  title?: string;
+  status?: AlertCheckStatus;
+  observedVerdict?: Verdict;
+  message: string;
+  checkedAt: string;
 };

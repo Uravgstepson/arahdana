@@ -28,7 +28,7 @@ export function Disclaimer() {
           className="min-h-10 flex-1 rounded-[1rem] px-2 text-left font-semibold"
           aria-expanded={isExpanded}
         >
-          Risiko investasi
+        Beta dan risiko investasi
         </button>
         <button
           type="button"
@@ -40,10 +40,10 @@ export function Disclaimer() {
       </div>
       {isExpanded ? (
         <p className="px-2 pb-2 pt-1 leading-6">
-          ArahDana adalah alat bantu analisis dan pencatatan investasi, bukan
-          penasihat keuangan. Hasil BUY/WAIT/AVOID berbasis data historis,
-          aturan risiko, dan asumsi yang bisa salah. Keputusan investasi tetap
-          tanggung jawab pengguna.
+          Ini beta software. ArahDana adalah alat bantu analisis dan pencatatan
+          investasi, bukan penasihat keuangan. Hasil BUY/WAIT/AVOID berbasis
+          data historis, aturan risiko, dan asumsi yang bisa salah. Analisis
+          mungkin keliru. Selalu verifikasi sebelum berinvestasi.
         </p>
       ) : null}
     </div>

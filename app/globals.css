@@ -314,8 +314,7 @@ tbody tr:hover {
 
   .motion-capsule,
   .motion-handle,
-  .motion-link,
-  .page-flow :where(section, form, article, .rounded-lg, .rounded-\[1\.8rem\], .rounded-\[1\.6rem\]) {
+  .motion-link {
     transition:
       transform 260ms var(--ease-fluid),
       box-shadow 260ms var(--ease-fluid),
@@ -327,27 +326,19 @@ tbody tr:hover {
 
   .input {
     transition:
-      transform 220ms var(--ease-fluid),
       box-shadow 220ms var(--ease-fluid),
       background-color 220ms var(--ease-fluid),
       border-color 220ms var(--ease-fluid);
   }
 
-  .input:focus {
-    transform: translateY(-1px);
-  }
-
   tbody tr {
-    transition:
-      background-color 180ms var(--ease-fluid),
-      transform 180ms var(--ease-fluid);
+    transition: background-color 180ms var(--ease-fluid);
   }
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .motion-link:hover,
-  .motion-handle:hover,
-  .page-flow :where(section, form, article, .rounded-lg, .rounded-\[1\.8rem\], .rounded-\[1\.6rem\]):hover {
+  .motion-handle:hover {
     transform: translateY(-2px);
     box-shadow: var(--glass-shadow-lift), var(--inner-highlight);
   }
@@ -355,10 +346,6 @@ tbody tr:hover {
   .motion-capsule:hover {
     transform: translateY(-1px);
     box-shadow: 0 22px 56px rgba(15, 23, 42, 0.2);
-  }
-
-  tbody tr:hover {
-    transform: translateX(2px);
   }
 }
 
@@ -368,7 +355,6 @@ tbody tr:hover {
     transform: scale(0.98);
   }
 
-  .page-flow :where(section, form, article, .rounded-lg, .rounded-\[1\.8rem\], .rounded-\[1\.6rem\]):hover,
   tbody tr:hover {
     transform: none;
     box-shadow: var(--glass-shadow), var(--inner-highlight);

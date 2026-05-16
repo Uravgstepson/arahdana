@@ -3,6 +3,7 @@ import { normalizeMarketTicker } from "@/lib/market/tickerUniverse";
 import { toYahooFinanceSymbol } from "@/lib/market/tickerSymbols";
 import { fetchGoogleFinanceScrape, GoogleScrapeError } from "@/lib/providers/googleFinanceScrape";
 import { fetchYahooChart, MarketDataError as YahooMarketDataError } from "@/lib/providers/yahoo";
+import { validateTicker } from "@/lib/validation";
 
 export const revalidate = 900;
 
@@ -13,6 +14,18 @@ const allowedIntervals = new Set(["5m", "15m", "1d", "1wk"]);
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawTicker = searchParams.get("ticker") || "BBCA:IDX";
+  const tickerValidation = validateTicker(rawTicker);
+  if (tickerValidation) {
+    return NextResponse.json(
+      {
+        source: "Market Data API",
+        ticker: rawTicker,
+        error: "Parameter ticker tidak valid.",
+        message: tickerValidation,
+      },
+      { status: 400 },
+    );
+  }
   const ticker = normalizeMarketTicker(rawTicker);
 
   const source = (searchParams.get("source") || "auto").toLowerCase();

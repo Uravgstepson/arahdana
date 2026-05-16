@@ -1,7 +1,9 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import Link from "next/link";
 import type {
+  AlertRule,
   AnalysisResult,
   DataSource,
   InvestmentType,
@@ -9,6 +11,7 @@ import type {
   WatchlistItem,
 } from "@/lib/types/investment";
 import { analyzeInvestment } from "@/lib/analysis/analyzeInvestment";
+import { LoadingState } from "@/components/AppState";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import {
   dataSourceLabel,
@@ -17,7 +20,13 @@ import {
 import { InstrumentOptions } from "@/components/PortfolioTable";
 import { InstrumentBadge } from "@/components/InstrumentBadge";
 import { useAuth } from "@/components/AuthProvider";
-import { loadCloudWatchlist, saveCloudWatchlist } from "@/lib/supabase/sync";
+import { loadCloudAlertRules, loadCloudWatchlist, saveCloudWatchlist } from "@/lib/supabase/sync";
+import {
+  normalizeSafeTicker,
+  validateCapital,
+  validateRiskTolerance,
+  validateTicker,
+} from "@/lib/validation";
 
 type WatchlistForm = Omit<WatchlistItem, "id">;
 type WatchlistAnalysisState = Record<
@@ -32,12 +41,14 @@ type WatchlistAnalysisState = Record<
 export default function WatchlistPage() {
   const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [form, setForm] = useState<WatchlistForm>(() =>
     createEmptyWatchlistForm(),
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [analysisById, setAnalysisById] = useState<WatchlistAnalysisState>({});
+  const [formError, setFormError] = useState("");
   const [analysisDefaults, setAnalysisDefaults] = useState({
     capital: 10_000_000,
     riskTolerance: 15,
@@ -52,6 +63,7 @@ export default function WatchlistPage() {
     window.setTimeout(() => {
       void (async () => {
         const storedItems = readStoredWatchlist();
+        const storedAlertRules = localArahDanaStorage.readAlertRules() ?? [];
         const settings = localArahDanaStorage.readSettings();
         if (isMounted) {
           setAnalysisDefaults({
@@ -70,6 +82,7 @@ export default function WatchlistPage() {
         if (!user) {
           if (!isMounted) return;
           setItems(storedItems);
+          setAlertRules(storedAlertRules);
           setSyncMessage("Login untuk sinkronisasi antar perangkat.");
           setIsHydrated(true);
           return;
@@ -77,9 +90,11 @@ export default function WatchlistPage() {
 
         try {
           const cloudItems = await loadCloudWatchlist(user);
+          const cloudAlertRules = await loadCloudAlertRules(user).catch(() => storedAlertRules);
           if (!isMounted) return;
           const nextItems = cloudItems.length > 0 ? cloudItems : storedItems;
           setItems(nextItems);
+          setAlertRules(cloudAlertRules.length > 0 ? cloudAlertRules : storedAlertRules);
           localArahDanaStorage.writeWatchlist(nextItems);
           setSyncMessage(
             cloudItems.length > 0
@@ -89,6 +104,7 @@ export default function WatchlistPage() {
         } catch (error) {
           if (!isMounted) return;
           setItems(storedItems);
+          setAlertRules(storedAlertRules);
           setSyncMessage(
             error instanceof Error
               ? `Cloud sync gagal, memakai localStorage. ${error.message}`
@@ -122,9 +138,17 @@ export default function WatchlistPage() {
       });
   }, [isHydrated, items, user]);
 
+  if (!isHydrated) {
+    return <LoadingState title="Memuat pantauan" message="Mengambil watchlist lokal dan cloud bila akun tersedia." />;
+  }
+
   function submitItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.name || !form.targetBuyZone) return;
+    setFormError("");
+    if (!form.name.trim() || !form.targetBuyZone.trim()) {
+      setFormError("Ticker/nama dan zona beli target wajib diisi.");
+      return;
+    }
 
     const normalized = normalizeWatchlistItem({
       ...form,
@@ -180,8 +204,19 @@ export default function WatchlistPage() {
   }
 
   async function analyzeItem(item: WatchlistItem) {
-    const ticker = item.name.trim().toUpperCase();
+    const ticker = normalizeSafeTicker(item.name);
     if (!ticker) return;
+    const tickerValidation = validateTicker(ticker);
+    const capitalValidation = validateCapital(analysisDefaults.capital);
+    const riskValidation = validateRiskTolerance(analysisDefaults.riskTolerance);
+    const validation = tickerValidation || capitalValidation || riskValidation;
+    if (validation) {
+      setAnalysisById((current) => ({
+        ...current,
+        [item.id]: { error: validation },
+      }));
+      return;
+    }
 
     setAnalysisById((current) => ({
       ...current,
@@ -318,6 +353,9 @@ export default function WatchlistPage() {
             </button>
           ) : null}
         </div>
+        {formError ? (
+          <p className="mt-3 text-sm font-medium text-rose-700">{formError}</p>
+        ) : null}
       </form>
 
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
@@ -329,7 +367,15 @@ export default function WatchlistPage() {
               atau zona target obligasi untuk mulai memantau.
             </div>
           ) : null}
-          {items.map((item) => (
+          {items.map((item) => {
+            const itemAlertRules = alertRules.filter(
+              (rule) =>
+                rule.sourceType === "watchlist" &&
+                rule.sourceId === item.id,
+            );
+            const latestCheckedAt = latestAlertCheckedAt(itemAlertRules);
+
+            return (
             <article
               key={item.id}
               className="rounded-lg border border-stone-200 p-4"
@@ -361,6 +407,12 @@ export default function WatchlistPage() {
                       ? "Menganalisis..."
                       : "Analisis"}
                   </button>
+                  <Link
+                    href={`/alerts?source=watchlist&id=${encodeURIComponent(item.id)}`}
+                    className="rounded-md border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                  >
+                    Create Alert
+                  </Link>
                   <button
                     type="button"
                     onClick={() => startEditing(item)}
@@ -377,6 +429,11 @@ export default function WatchlistPage() {
                   </button>
                 </div>
               </div>
+              <div className="mt-3 grid gap-2 rounded-lg bg-stone-100 p-3 sm:grid-cols-3">
+                <AlertMeta label="Alert status" value={watchlistAlertStatus(itemAlertRules)} />
+                <AlertMeta label="Active alerts" value={String(itemAlertRules.filter((rule) => rule.enabled).length)} />
+                <AlertMeta label="Last checked" value={latestCheckedAt ? formatDateTime(latestCheckedAt) : "Belum pernah"} />
+              </div>
               <p className="mt-3 text-sm font-medium text-emerald-700">
                 Target: {item.targetBuyZone}
               </p>
@@ -387,9 +444,19 @@ export default function WatchlistPage() {
               ) : null}
               <WatchlistAnalysisPanel state={analysisById[item.id]} />
             </article>
-          ))}
+            );
+          })}
         </div>
       </section>
+    </div>
+  );
+}
+
+function AlertMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-stone-950">{value}</p>
     </div>
   );
 }
@@ -401,6 +468,21 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
+}
+
+function watchlistAlertStatus(rules: AlertRule[]) {
+  if (rules.length === 0) return "No alert";
+  if (rules.some((rule) => rule.lastCheckStatus === "triggered")) return "Triggered";
+  if (rules.some((rule) => rule.lastCheckStatus === "error")) return "Needs check";
+  if (rules.some((rule) => rule.enabled)) return "Active";
+  return "Inactive";
+}
+
+function latestAlertCheckedAt(rules: AlertRule[]) {
+  return rules
+    .map((rule) => rule.lastCheckedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
 }
 
 function readStoredWatchlist() {

@@ -2,7 +2,10 @@ import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import { STORAGE_KEYS } from "@/lib/storage/localStorage";
 import type {
   DataSource,
+  AppNotification,
+  FinancialGoal,
   InvestmentType,
+  GoalContribution,
   PortfolioItem,
   RiskCategory,
   TimeHorizon,
@@ -10,17 +13,21 @@ import type {
   WatchlistItem,
 } from "@/lib/types/investment";
 import { clampNumber, nonNegativeNumber } from "@/lib/utils/format";
+import { normalizeNotificationPreferences } from "@/lib/notifications/notificationSystem";
 
 export type ArahDanaBackupData = {
   portfolio: PortfolioItem[];
   watchlist: WatchlistItem[];
+  goals: FinancialGoal[];
+  goalContributions: GoalContribution[];
+  notifications: AppNotification[];
   settings: UserSettings;
   analysisResults: unknown[];
 };
 
 export type ArahDanaBackupFile = {
   app: "ArahDana";
-  version: "0.4.0";
+  version: string;
   exportedAt: string;
   data: ArahDanaBackupData;
 };
@@ -33,7 +40,7 @@ export type BackupActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
-const BACKUP_VERSION = "0.4.0";
+const BACKUP_VERSION = "1.0.0-beta.1";
 const ARAHDANA_STORAGE_PREFIX = "arahdana.";
 
 const investmentTypes = new Set<InvestmentType>([
@@ -61,6 +68,20 @@ const dataSources = new Set<DataSource>([
   "bibit_import",
   "savings_import",
   "mock_data",
+]);
+const goalCategories = new Set<FinancialGoal["category"]>([
+  "emergency_fund",
+  "education",
+  "motorcycle",
+  "car",
+  "house",
+  "retirement",
+  "custom",
+]);
+const goalRiskProfiles = new Set<FinancialGoal["riskProfile"]>([
+  "defensive",
+  "balanced",
+  "aggressive",
 ]);
 
 export function exportArahDanaData(): BackupDataResult {
@@ -93,6 +114,9 @@ export function collectArahDanaData(): ArahDanaBackupData {
   return {
     portfolio: readArray<PortfolioItem>(STORAGE_KEYS.portfolio),
     watchlist: readArray<WatchlistItem>(STORAGE_KEYS.watchlist),
+    goals: readArray<FinancialGoal>(STORAGE_KEYS.goals),
+    goalContributions: readArray<GoalContribution>(STORAGE_KEYS.goalContributions),
+    notifications: readArray<AppNotification>(STORAGE_KEYS.notifications),
     settings: normalizeSettings(readObject(STORAGE_KEYS.settings)),
     analysisResults: readArray<unknown>(STORAGE_KEYS.analysisResults),
   };
@@ -116,13 +140,16 @@ export async function importArahDanaData(file: File): Promise<BackupDataResult> 
 
   writeJson(STORAGE_KEYS.portfolio, validation.data.portfolio);
   writeJson(STORAGE_KEYS.watchlist, validation.data.watchlist);
+  writeJson(STORAGE_KEYS.goals, validation.data.goals);
+  writeJson(STORAGE_KEYS.goalContributions, validation.data.goalContributions);
+  writeJson(STORAGE_KEYS.notifications, validation.data.notifications);
   writeJson(STORAGE_KEYS.settings, validation.data.settings);
   writeJson(STORAGE_KEYS.analysisResults, validation.data.analysisResults);
   notifyLocalDataUpdated();
 
   return {
     ok: true,
-    message: `Backup berhasil dipulihkan: ${validation.data.portfolio.length} portofolio, ${validation.data.watchlist.length} pantauan, dan pengaturan.`,
+    message: `Backup berhasil dipulihkan: ${validation.data.portfolio.length} portofolio, ${validation.data.watchlist.length} pantauan, ${validation.data.goals.length} tujuan, dan pengaturan.`,
     data: validation.data,
   };
 }
@@ -150,6 +177,21 @@ export function validateBackupData(data: unknown): BackupDataResult {
   );
   if (!watchlist.ok) return watchlist;
 
+  const goals = validateGoals(
+    data.data.goals === undefined ? [] : data.data.goals,
+  );
+  if (!goals.ok) return goals;
+
+  const goalContributions = validateGoalContributions(
+    data.data.goalContributions === undefined ? [] : data.data.goalContributions,
+  );
+  if (!goalContributions.ok) return goalContributions;
+
+  const notifications = validateNotifications(
+    data.data.notifications === undefined ? [] : data.data.notifications,
+  );
+  if (!notifications.ok) return notifications;
+
   const settings = validateSettings(
     data.data.settings === undefined ? {} : data.data.settings,
   );
@@ -164,6 +206,9 @@ export function validateBackupData(data: unknown): BackupDataResult {
     data: {
       portfolio: portfolio.items,
       watchlist: watchlist.items,
+      goals: goals.items,
+      goalContributions: goalContributions.items,
+      notifications: notifications.items,
       settings: settings.settings,
       analysisResults: analysisResults.items,
     },
@@ -315,6 +360,148 @@ function validateWatchlist(
   return { ok: true, items };
 }
 
+function validateGoals(
+  value: unknown,
+): { ok: true; items: FinancialGoal[] } | { ok: false; message: string } {
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data tujuan finansial di backup tidak valid." };
+  }
+
+  const items: FinancialGoal[] = [];
+
+  for (const [index, item] of value.entries()) {
+    if (!isRecord(item)) {
+      return { ok: false, message: `Tujuan finansial #${index + 1} tidak valid.` };
+    }
+
+    if (!isNonEmptyString(item.id) || !isNonEmptyString(item.name)) {
+      return { ok: false, message: `Tujuan finansial #${index + 1} harus memiliki id dan nama.` };
+    }
+
+    if (!isGoalCategory(item.category)) {
+      return { ok: false, message: `Tujuan finansial #${index + 1} memiliki kategori tidak valid.` };
+    }
+
+    if (
+      !isNonNegativeNumber(item.targetAmount) ||
+      !isNonNegativeNumber(item.monthlyContribution) ||
+      !isNonNegativeNumber(item.riskTolerance)
+    ) {
+      return { ok: false, message: `Tujuan finansial #${index + 1} memiliki angka tidak valid.` };
+    }
+
+    if (!isString(item.targetDate) || !isGoalRiskProfile(item.riskProfile)) {
+      return { ok: false, message: `Tujuan finansial #${index + 1} memiliki tanggal atau profil risiko tidak valid.` };
+    }
+
+    if (
+      !Array.isArray(item.preferredInstruments) ||
+      !item.preferredInstruments.every(isInvestmentType)
+    ) {
+      return { ok: false, message: `Tujuan finansial #${index + 1} memiliki instrumen pilihan tidak valid.` };
+    }
+
+    if (
+      !Array.isArray(item.linkedHoldingIds) ||
+      !item.linkedHoldingIds.every(isString)
+    ) {
+      return { ok: false, message: `Tujuan finansial #${index + 1} memiliki link holding tidak valid.` };
+    }
+
+    items.push({
+      id: item.id,
+      category: item.category,
+      name: item.name,
+      targetAmount: item.targetAmount,
+      targetDate: item.targetDate,
+      monthlyContribution: item.monthlyContribution,
+      riskTolerance: clampNumber(item.riskTolerance, 5, 30),
+      riskProfile: item.riskProfile,
+      preferredInstruments: item.preferredInstruments,
+      linkedHoldingIds: item.linkedHoldingIds,
+      createdAt: isString(item.createdAt) ? item.createdAt : new Date().toISOString(),
+      updatedAt: isString(item.updatedAt) ? item.updatedAt : new Date().toISOString(),
+    });
+  }
+
+  return { ok: true, items };
+}
+
+function validateGoalContributions(
+  value: unknown,
+): { ok: true; items: GoalContribution[] } | { ok: false; message: string } {
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data kontribusi tujuan di backup tidak valid." };
+  }
+
+  const items: GoalContribution[] = [];
+
+  for (const [index, item] of value.entries()) {
+    if (!isRecord(item)) {
+      return { ok: false, message: `Kontribusi tujuan #${index + 1} tidak valid.` };
+    }
+
+    if (!isNonEmptyString(item.id) || !isNonEmptyString(item.goalId)) {
+      return { ok: false, message: `Kontribusi tujuan #${index + 1} harus memiliki id dan goalId.` };
+    }
+
+    if (!isNonNegativeNumber(item.amount) || !isString(item.contributionMonth)) {
+      return { ok: false, message: `Kontribusi tujuan #${index + 1} memiliki nilai atau bulan tidak valid.` };
+    }
+
+    if (item.note !== undefined && !isString(item.note)) {
+      return { ok: false, message: `Kontribusi tujuan #${index + 1} memiliki catatan tidak valid.` };
+    }
+
+    items.push({
+      id: item.id,
+      goalId: item.goalId,
+      amount: item.amount,
+      contributionMonth: item.contributionMonth,
+      note: item.note,
+      createdAt: isString(item.createdAt) ? item.createdAt : new Date().toISOString(),
+    });
+  }
+
+  return { ok: true, items };
+}
+
+function validateNotifications(
+  value: unknown,
+): { ok: true; items: AppNotification[] } | { ok: false; message: string } {
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data notifikasi di backup tidak valid." };
+  }
+
+  const items: AppNotification[] = [];
+
+  for (const [index, item] of value.entries()) {
+    if (!isRecord(item)) {
+      return { ok: false, message: `Notifikasi #${index + 1} tidak valid.` };
+    }
+
+    if (!isNonEmptyString(item.id) || !isNonEmptyString(item.title) || !isString(item.message)) {
+      return { ok: false, message: `Notifikasi #${index + 1} harus memiliki id, judul, dan pesan.` };
+    }
+
+    if (!isNotificationType(item.type) || !isString(item.createdAt)) {
+      return { ok: false, message: `Notifikasi #${index + 1} memiliki tipe atau waktu tidak valid.` };
+    }
+
+    items.push({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      message: item.message,
+      createdAt: item.createdAt,
+      readAt: isString(item.readAt) ? item.readAt : undefined,
+      sourceId: isString(item.sourceId) ? item.sourceId : undefined,
+    });
+  }
+
+  return { ok: true, items };
+}
+
 function validateSettings(
   value: unknown,
 ): { ok: true; settings: UserSettings } | { ok: false; message: string } {
@@ -352,6 +539,13 @@ function validateSettings(
     return { ok: false, message: "Settings APR RDPU tidak valid." };
   }
 
+  if (
+    value.notificationPreferences !== undefined &&
+    !isRecord(value.notificationPreferences)
+  ) {
+    return { ok: false, message: "Settings notifikasi tidak valid." };
+  }
+
   return { ok: true, settings: normalizeSettings(value) };
 }
 
@@ -386,6 +580,7 @@ function normalizeSettings(settings: Partial<UserSettings> | null): UserSettings
     aprMoneyMarketFund: isNonNegativeNumber(settings?.aprMoneyMarketFund)
       ? settings.aprMoneyMarketFund
       : DEFAULT_USER_SETTINGS.aprMoneyMarketFund,
+    notificationPreferences: normalizeNotificationPreferences(settings?.notificationPreferences),
   };
 }
 
@@ -454,4 +649,23 @@ function isWatchlistStatus(value: unknown): value is WatchlistItem["status"] {
 
 function isDataSource(value: unknown): value is DataSource {
   return isString(value) && dataSources.has(value as DataSource);
+}
+
+function isGoalCategory(value: unknown): value is FinancialGoal["category"] {
+  return isString(value) && goalCategories.has(value as FinancialGoal["category"]);
+}
+
+function isGoalRiskProfile(value: unknown): value is FinancialGoal["riskProfile"] {
+  return isString(value) && goalRiskProfiles.has(value as FinancialGoal["riskProfile"]);
+}
+
+function isNotificationType(value: unknown): value is AppNotification["type"] {
+  return (
+    value === "reminder" ||
+    value === "risk" ||
+    value === "watchlist" ||
+    value === "goal" ||
+    value === "portfolio" ||
+    value === "market"
+  );
 }

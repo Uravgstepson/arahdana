@@ -4,12 +4,16 @@ import Link from "next/link";
 import { useState } from "react";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { useAuth } from "@/components/AuthProvider";
+import { dispatchToast } from "@/components/ToastViewport";
 import {
   signOut,
   upsertUserProfile,
 } from "@/lib/supabase/auth";
 import {
   loadCloudAnalysisResults,
+  loadCloudAlertRules,
+  loadCloudGoalContributions,
+  loadCloudGoals,
   loadCloudPortfolio,
   loadCloudSettings,
   loadCloudWatchlist,
@@ -61,7 +65,12 @@ export function AccountPanel() {
       const result = await syncLocalDataToCloud(user);
       setStatus({
         tone: "success",
-        message: `Data lokal tersinkron: ${result.portfolioCount} holding, ${result.watchlistCount} pantauan, ${result.analysisCount} hasil analisis.`,
+        message: `Data lokal tersinkron: ${result.portfolioCount} holding, ${result.watchlistCount} pantauan, ${result.goalCount} tujuan, ${result.analysisCount} hasil analisis, ${result.alertRuleCount} alert.`,
+      });
+      dispatchToast({
+        tone: "success",
+        title: "Sync complete",
+        message: "Data lokal berhasil tersinkron ke cloud.",
       });
     });
   }
@@ -70,21 +79,32 @@ export function AccountPanel() {
     if (!user) return;
 
     await runTask(async () => {
-      const [portfolio, watchlist, settings, analysisResults] = await Promise.all([
+      const [portfolio, watchlist, settings, analysisResults, goals, goalContributions, alertRules] = await Promise.all([
         loadCloudPortfolio(user),
         loadCloudWatchlist(user),
         loadCloudSettings(user),
         loadCloudAnalysisResults(user),
+        loadCloudGoals(user),
+        loadCloudGoalContributions(user),
+        loadCloudAlertRules(user),
       ]);
 
       localArahDanaStorage.writePortfolio(portfolio);
       localArahDanaStorage.writeWatchlist(watchlist);
       if (settings) localArahDanaStorage.writeSettings(settings);
       localArahDanaStorage.writeAnalysisResults(analysisResults);
+      localArahDanaStorage.writeGoals(goals);
+      localArahDanaStorage.writeGoalContributions(goalContributions);
+      localArahDanaStorage.writeAlertRules(alertRules);
       window.dispatchEvent(new Event("arahdana:local-data-updated"));
       setStatus({
         tone: "success",
-        message: `Cloud dipulihkan ke browser ini: ${portfolio.length} holding, ${watchlist.length} pantauan, ${analysisResults.length} hasil analisis.`,
+        message: `Cloud dipulihkan ke browser ini: ${portfolio.length} holding, ${watchlist.length} pantauan, ${goals.length} tujuan, ${analysisResults.length} hasil analisis, ${alertRules.length} alert.`,
+      });
+      dispatchToast({
+        tone: "success",
+        title: "Cloud dipulihkan",
+        message: "Data cloud sudah dicadangkan ke browser ini.",
       });
     });
   }

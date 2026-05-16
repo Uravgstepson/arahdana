@@ -30,6 +30,13 @@ import {
 import { fetchPublicMarketData } from "@/lib/providers/marketClient";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { saveCloudAnalysisResult } from "@/lib/supabase/sync";
+import {
+  normalizeSafeTicker,
+  validateCapital,
+  validatePrices,
+  validateRiskTolerance,
+  validateTicker,
+} from "@/lib/validation";
 
 type RangeOption = "1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "5y" | "max";
 type IntervalOption = "5m" | "15m" | "1d" | "1wk";
@@ -149,7 +156,7 @@ export function AnalyzerForm() {
           ? "1d"
           : range;
       const marketData = await fetchPublicMarketData({
-        ticker: normalizeMarketTicker(ticker),
+        ticker: normalizeMarketTicker(normalizeSafeTicker(ticker)),
         range: effectiveRange,
         interval,
         live: interval.endsWith("m"),
@@ -181,11 +188,17 @@ export function AnalyzerForm() {
   }
 
   async function saveAnalysisResult() {
+    const priceError = validatePrices(priceSource.prices);
+    if (priceError) {
+      setSaveStatus({ tone: "error", message: priceError });
+      return;
+    }
+
     const saved: SavedAnalysisResult = {
       id: crypto.randomUUID(),
       name,
       type,
-      ticker,
+      ticker: normalizeSafeTicker(ticker),
       result,
       priceSourceLabel: priceSource.label,
       isMockData: priceSource.isMock,
@@ -382,38 +395,44 @@ export function AnalyzerForm() {
           </StatusBox>
         ) : null}
 
-        <StatusBox
-          tone={priceSource.isMock ? "warning" : "success"}
-          title="Sumber harga aktif"
-        >
-          {priceSource.label}. Penutupan terbaru:{" "}
-          {latestClose
-            ? `${formatRupiah(latestClose.close)} (${latestClose.date})`
-            : "Tidak ada data harga valid"}
-          . Jumlah data: {priceSource.prices.length}.
-          {marketMeta ? (
-            <>
-              {" "}
-              {marketMeta.ticker} di{" "}
-              {marketMeta.exchangeName ?? "bursa tidak diketahui"}
-              {marketMeta.regularMarketPrice
-                ? `, harga pasar ${formatRupiah(marketMeta.regularMarketPrice)}`
-                : ""}
-              .
-            </>
-          ) : null}
-        </StatusBox>
-
-        <Field label="Harga historis manual opsional">
-          <textarea
-            className="input min-h-32"
-            value={manualPrices}
-            onChange={(event) => {
-              setManualPrices(event.target.value);
-              if (apiPrices) clearLiveData();
-            }}
-          />
-        </Field>
+        <details className="mt-4 rounded-[1.2rem] bg-stone-100 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-stone-950">
+            Sumber data dan input manual
+          </summary>
+          <div className="mt-4 grid gap-4">
+            <StatusBox
+              tone={priceSource.isMock ? "warning" : "success"}
+              title="Sumber harga aktif"
+            >
+              {priceSource.label}. Penutupan terbaru:{" "}
+              {latestClose
+                ? `${formatRupiah(latestClose.close)} (${latestClose.date})`
+                : "Tidak ada data harga valid"}
+              . Jumlah data: {priceSource.prices.length}.
+              {marketMeta ? (
+                <>
+                  {" "}
+                  {marketMeta.ticker} di{" "}
+                  {marketMeta.exchangeName ?? "bursa tidak diketahui"}
+                  {marketMeta.regularMarketPrice
+                    ? `, harga pasar ${formatRupiah(marketMeta.regularMarketPrice)}`
+                    : ""}
+                  .
+                </>
+              ) : null}
+            </StatusBox>
+            <Field label="Harga historis manual opsional">
+              <textarea
+                className="input min-h-32"
+                value={manualPrices}
+                onChange={(event) => {
+                  setManualPrices(event.target.value);
+                  if (apiPrices) clearLiveData();
+                }}
+              />
+            </Field>
+          </div>
+        </details>
       </section>
       {isFetching ? (
         <AnalyzerResultSkeleton />
@@ -464,15 +483,12 @@ function validateInputs({
   riskTolerance: number;
 }) {
   if (!ticker.trim()) return "Ticker wajib diisi sebelum mengambil data pasar.";
-  if (!Number.isFinite(capital) || capital <= 0)
-    return "Modal harus berupa angka lebih dari 0.";
-  if (
-    !Number.isFinite(riskTolerance) ||
-    riskTolerance < 5 ||
-    riskTolerance > 30
-  ) {
-    return "Toleransi risiko harus berada di antara 5% dan 30%.";
-  }
+  const tickerError = validateTicker(ticker);
+  if (tickerError) return tickerError;
+  const capitalError = validateCapital(capital);
+  if (capitalError) return capitalError;
+  const riskError = validateRiskTolerance(riskTolerance);
+  if (riskError) return riskError;
   return "";
 }
 
