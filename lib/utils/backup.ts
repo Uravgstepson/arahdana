@@ -4,6 +4,7 @@ import type {
   DataSource,
   AppNotification,
   BetaSignup,
+  BetaTestFeedback,
   FinancialGoal,
   InvestmentType,
   GoalContribution,
@@ -25,6 +26,7 @@ export type ArahDanaBackupData = {
   notifications: AppNotification[];
   reports: PortfolioReviewReport[];
   betaSignups: BetaSignup[];
+  betaTestFeedback: BetaTestFeedback[];
   settings: UserSettings;
   analysisResults: unknown[];
 };
@@ -123,6 +125,7 @@ export function collectArahDanaData(): ArahDanaBackupData {
     notifications: readArray<AppNotification>(STORAGE_KEYS.notifications),
     reports: readArray<PortfolioReviewReport>(STORAGE_KEYS.reports),
     betaSignups: readArray<BetaSignup>(STORAGE_KEYS.betaSignups),
+    betaTestFeedback: readArray<BetaTestFeedback>(STORAGE_KEYS.betaTestFeedback),
     settings: normalizeSettings(readObject(STORAGE_KEYS.settings)),
     analysisResults: readArray<unknown>(STORAGE_KEYS.analysisResults),
   };
@@ -151,6 +154,7 @@ export async function importArahDanaData(file: File): Promise<BackupDataResult> 
   writeJson(STORAGE_KEYS.notifications, validation.data.notifications);
   writeJson(STORAGE_KEYS.reports, validation.data.reports);
   writeJson(STORAGE_KEYS.betaSignups, validation.data.betaSignups);
+  writeJson(STORAGE_KEYS.betaTestFeedback, validation.data.betaTestFeedback);
   writeJson(STORAGE_KEYS.settings, validation.data.settings);
   writeJson(STORAGE_KEYS.analysisResults, validation.data.analysisResults);
   notifyLocalDataUpdated();
@@ -206,6 +210,9 @@ export function validateBackupData(data: unknown): BackupDataResult {
   const betaSignups = validateBetaSignups(data.data.betaSignups);
   if (!betaSignups.ok) return betaSignups;
 
+  const betaTestFeedback = validateBetaTestFeedback(data.data.betaTestFeedback);
+  if (!betaTestFeedback.ok) return betaTestFeedback;
+
   const settings = validateSettings(
     data.data.settings === undefined ? {} : data.data.settings,
   );
@@ -225,6 +232,7 @@ export function validateBackupData(data: unknown): BackupDataResult {
       notifications: notifications.items,
       reports: reports.items,
       betaSignups: betaSignups.items,
+      betaTestFeedback: betaTestFeedback.items,
       settings: settings.settings,
       analysisResults: analysisResults.items,
     },
@@ -593,6 +601,16 @@ function validateBetaSignups(
     return { ok: false, message: "Data beta signup di backup tidak valid." };
   }
   return { ok: true, items: value.filter(isRecord) as BetaSignup[] };
+}
+
+function validateBetaTestFeedback(
+  value: unknown,
+): { ok: true; items: BetaTestFeedback[] } | { ok: false; message: string } {
+  if (value === undefined) return { ok: true, items: [] };
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Data beta test feedback di backup tidak valid." };
+  }
+  return { ok: true, items: value.filter(isRecord) as BetaTestFeedback[] };
 }
 
 function normalizeSettings(settings: Partial<UserSettings> | null): UserSettings {

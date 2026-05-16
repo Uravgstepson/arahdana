@@ -36,7 +36,7 @@ const primaryNav: NavItem[] = [
 ];
 
 const desktopExtras: NavItem[] = [
-  { href: "/goals", label: "Tujuan", shortLabel: "Tujuan", icon: "goals" },
+  { href: "/goals", label: "Goals/DCA", shortLabel: "DCA", icon: "goals" },
   { href: "/alerts", label: "Alerts", shortLabel: "Alerts", icon: "alerts" },
   { href: "/reports", label: "Reports", shortLabel: "Reports", icon: "reports" },
   { href: "/market-prices", label: "Harga Pasar", shortLabel: "Pasar", icon: "market" },

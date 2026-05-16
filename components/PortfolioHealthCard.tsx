@@ -1,11 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import type { PortfolioItem } from "@/lib/types/investment";
-import {
-  calculatePortfolioHealthScore,
-  type HealthScoreResult,
-} from "@/lib/portfolio/healthScore";
-import { useMemo } from "react";
+import { calculatePortfolioHealthScore } from "@/lib/portfolio/healthScore";
 
 type PortfolioValuationSettings = {
   aprMoneyMarketFund?: number;
@@ -13,187 +10,187 @@ type PortfolioValuationSettings = {
   riskTolerance?: number;
 };
 
-interface PortfolioHealthCardProps {
+type PortfolioHealthCardProps = {
   portfolio: PortfolioItem[];
   riskTolerance?: number;
   aprMoneyMarketFund?: number;
-}
-
-function getGradeColor(grade: string): string {
-  switch (grade) {
-    case "Excellent":
-      return "from-green-500 to-emerald-600";
-    case "Healthy":
-      return "from-blue-500 to-cyan-600";
-    case "Needs Attention":
-      return "from-yellow-500 to-orange-600";
-    case "Risky":
-      return "from-orange-500 to-red-600";
-    case "Critical":
-      return "from-red-600 to-rose-700";
-    default:
-      return "from-gray-500 to-gray-600";
-  }
-}
-
-function getScoreTextColor(grade: string): string {
-  switch (grade) {
-    case "Excellent":
-      return "text-green-600";
-    case "Healthy":
-      return "text-blue-600";
-    case "Needs Attention":
-      return "text-yellow-600";
-    case "Risky":
-      return "text-orange-600";
-    case "Critical":
-      return "text-red-600";
-    default:
-      return "text-gray-600";
-  }
-}
+};
 
 export function PortfolioHealthCard({
   portfolio,
   riskTolerance = 15,
   aprMoneyMarketFund = 0.05,
 }: PortfolioHealthCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const healthScore = useMemo(() => {
-    const settings: PortfolioValuationSettings = {
-      aprMoneyMarketFund,
-      riskTolerance,
-    };
+    const settings: PortfolioValuationSettings = { aprMoneyMarketFund, riskTolerance };
     return calculatePortfolioHealthScore(portfolio, settings);
   }, [portfolio, riskTolerance, aprMoneyMarketFund]);
-
-  const gradientClass = getGradeColor(healthScore.grade);
-  const textColorClass = getScoreTextColor(healthScore.grade);
+  const tone = toneForScore(healthScore.totalScore);
+  const actions = healthScore.recommendedActions.slice(0, 2);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-      {/* Header with gradient */}
-      <div className={`bg-gradient-to-r ${gradientClass} p-6 text-white`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold opacity-90">
-              Portfolio Health
+    <section className="overflow-hidden rounded-[1.6rem] border border-stone-200 bg-white shadow-sm">
+      <div className={`h-1.5 ${tone.accent}`} />
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+              Portfolio health
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-stone-950">
+              {healthScore.grade}
             </h3>
-            <p className="text-xs opacity-75 mt-1">Overall assessment</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-600">
+              {healthScore.summary}
+            </p>
           </div>
-          {/* Circular score */}
-          <div className="relative w-24 h-24">
-            <svg
-              className="w-full h-full transform -rotate-90"
-              viewBox="0 0 100 100"
-            >
-              {/* Background circle */}
-              <circle
-                cx="50"
-                cy="50"
-                r="45"
-                fill="none"
-                stroke="rgba(255,255,255,0.2)"
-                strokeWidth="6"
-              />
-              {/* Progress circle */}
-              <circle
-                cx="50"
-                cy="50"
-                r="45"
-                fill="none"
-                stroke="white"
-                strokeWidth="6"
-                strokeDasharray={`${2 * Math.PI * 45}`}
-                strokeDashoffset={`${2 * Math.PI * 45 * (1 - healthScore.totalScore / 100)}`}
-                strokeLinecap="round"
-                className="transition-all duration-500"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-2xl font-bold">
-                  {healthScore.totalScore}
-                </div>
-                <div className="text-xs opacity-90">/100</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Grade and summary */}
-      <div className="p-6 space-y-4">
-        <div>
-          <div className={`text-lg font-bold ${textColorClass} mb-2`}>
-            {healthScore.grade}
-          </div>
-          <p className="text-sm text-gray-700">{healthScore.summary}</p>
+          <ScoreGauge score={healthScore.totalScore} tone={tone} size="compact" />
         </div>
 
-        {/* Score breakdown grid */}
-        <div className="grid grid-cols-2 gap-3 pt-2 border-t">
-          <div className="text-center py-2">
-            <div className="text-xs text-gray-600 mb-1">Diversification</div>
-            <div className="text-lg font-semibold text-gray-900">
-              {healthScore.diversificationScore}
-            </div>
-          </div>
-          <div className="text-center py-2">
-            <div className="text-xs text-gray-600 mb-1">Allocation</div>
-            <div className="text-lg font-semibold text-gray-900">
-              {healthScore.allocationScore}
-            </div>
-          </div>
-          <div className="text-center py-2">
-            <div className="text-xs text-gray-600 mb-1">Risk</div>
-            <div className="text-lg font-semibold text-gray-900">
-              {healthScore.riskScore}
-            </div>
-          </div>
-          <div className="text-center py-2">
-            <div className="text-xs text-gray-600 mb-1">Performance</div>
-            <div className="text-lg font-semibold text-gray-900">
-              {healthScore.performanceScore}
-            </div>
-          </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <MiniFactor label="Diversification" score={healthScore.diversificationScore} />
+          <MiniFactor label="Risk exposure" score={healthScore.riskScore} />
+          <MiniFactor label="Concentration" score={healthScore.concentrationScore} />
         </div>
 
-        {/* Top recommendations */}
-        {healthScore.recommendedActions.length > 0 && (
-          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-            <h4 className="text-xs font-semibold text-blue-900 mb-2">
-              Recommended Actions
-            </h4>
-            <ul className="space-y-1">
-              {healthScore.recommendedActions.slice(0, 2).map((action, idx) => (
-                <li
-                  key={idx}
-                  className="text-xs text-blue-800 flex items-start gap-2"
-                >
-                  <span className="text-blue-600 font-bold mt-0.5">•</span>
+        {actions.length > 0 ? (
+          <div className="mt-5 rounded-[1.1rem] bg-stone-50 p-4 ring-1 ring-stone-100">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+              Next steps
+            </p>
+            <ol className="mt-3 space-y-2">
+              {actions.map((action, index) => (
+                <li key={action} className="flex gap-3 text-sm leading-6 text-stone-700">
+                  <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[0.7rem] font-bold ${tone.pill}`}>
+                    {index + 1}
+                  </span>
                   <span>{action}</span>
                 </li>
               ))}
-            </ul>
+            </ol>
           </div>
-        )}
+        ) : null}
 
-        {/* Warnings */}
-        {healthScore.warnings.length > 0 && (
-          <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-            <h4 className="text-xs font-semibold text-yellow-900 mb-2">
-              Alerts
-            </h4>
-            <ul className="space-y-1">
-              {healthScore.warnings.slice(0, 2).map((warning, idx) => (
-                <li key={idx} className="text-xs text-yellow-800">
-                  {warning}
-                </li>
-              ))}
-            </ul>
+        <button
+          type="button"
+          onClick={() => setIsExpanded((current) => !current)}
+          className="mt-4 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+        >
+          {isExpanded ? "Hide breakdown" : "Show breakdown"}
+        </button>
+
+        {isExpanded ? (
+          <div className="mt-4 space-y-3 border-t border-stone-100 pt-4">
+            <FactorRow label="Allocation balance" score={healthScore.allocationScore} />
+            <FactorRow label="Performance" score={healthScore.performanceScore} />
+            {healthScore.warnings.slice(0, 2).map((warning) => (
+              <p key={warning} className="rounded-[1rem] bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 ring-1 ring-amber-100">
+                {warning}
+              </p>
+            ))}
           </div>
-        )}
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ScoreGauge({
+  score,
+  tone,
+  size = "large",
+}: {
+  score: number;
+  tone: ReturnType<typeof toneForScore>;
+  size?: "compact" | "large";
+}) {
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - score / 100);
+  const dimension = size === "compact" ? "h-24 w-24" : "h-32 w-32";
+
+  return (
+    <div className={`relative shrink-0 ${dimension}`}>
+      <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r={radius} fill="none" stroke="#e7e5e4" strokeWidth="8" />
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="8"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className={tone.text}
+        />
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">
+        <div>
+          <p className="text-3xl font-semibold tracking-tight text-stone-950">{score}</p>
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-stone-400">
+            /100
+          </p>
+        </div>
       </div>
     </div>
   );
+}
+
+function MiniFactor({ label, score }: { label: string; score: number }) {
+  return (
+    <div className="rounded-[1rem] bg-stone-50 p-3 ring-1 ring-stone-100">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-stone-500">{label}</span>
+        <span className="text-sm font-semibold text-stone-950">{score}</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-200">
+        <div className={`h-full rounded-full ${barColor(score)}`} style={{ width: `${score}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function FactorRow({ label, score }: { label: string; score: number }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium text-stone-700">{label}</span>
+        <span className="font-semibold text-stone-950">{score}/100</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+        <div className={`h-full rounded-full ${barColor(score)}`} style={{ width: `${score}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function toneForScore(score: number) {
+  if (score >= 70) {
+    return {
+      accent: "bg-emerald-500",
+      text: "text-emerald-500",
+      pill: "bg-emerald-100 text-emerald-800",
+    };
+  }
+  if (score >= 55) {
+    return {
+      accent: "bg-amber-400",
+      text: "text-amber-500",
+      pill: "bg-amber-100 text-amber-800",
+    };
+  }
+  return {
+    accent: "bg-rose-500",
+    text: "text-rose-500",
+    pill: "bg-rose-100 text-rose-800",
+  };
+}
+
+function barColor(score: number) {
+  if (score >= 70) return "bg-emerald-500";
+  if (score >= 55) return "bg-amber-400";
+  return "bg-rose-500";
 }

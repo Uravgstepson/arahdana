@@ -15,7 +15,7 @@ import { localArahDanaStorage } from "@/lib/storage/localStorage";
 const titles: Record<string, string> = {
   "/dashboard": "Dasbor",
   "/portfolio": "Portofolio",
-  "/goals": "Tujuan",
+  "/goals": "Goals/DCA",
   "/alerts": "Alerts",
   "/reports": "Reports",
   "/notifications": "Notifikasi",
@@ -27,6 +27,7 @@ const titles: Record<string, string> = {
   "/onboarding": "Onboarding",
   "/changelog": "Changelog",
   "/feedback": "Feedback",
+  "/beta-test": "Beta Test",
   "/profile": "Akun",
   "/login": "Login",
 };
@@ -71,9 +72,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700 sm:block">
               ArahDana
             </p>
-            <h1 className="truncate text-xl font-semibold leading-tight text-stone-950 sm:text-2xl">
-              {title}
-            </h1>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h1 className="truncate text-xl font-semibold leading-tight text-stone-950 sm:text-2xl">
+                {title}
+              </h1>
+              <Link
+                href="/beta-test"
+                className="rounded-full bg-emerald-50 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.08em] text-emerald-700 ring-1 ring-emerald-100"
+              >
+                ArahDana Beta
+              </Link>
+            </div>
           </div>
           <NotificationBellButton unreadCount={unreadCount} />
         </header>
@@ -82,8 +91,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div key={pathname} className="page-flow relative z-0">
           {children}
         </div>
-        <footer className="mt-8 text-center text-[0.68rem] font-medium tracking-[0.08em] text-stone-400 lg:hidden">
-          {APP_VERSION_LABEL}
+        <footer className="mt-8 flex items-center justify-center gap-3 text-center text-[0.68rem] font-medium tracking-[0.08em] text-stone-400 lg:hidden">
+          <span>{APP_VERSION_LABEL}</span>
+          <Link
+            href="/beta-test"
+            className="rounded-full bg-white px-3 py-1 font-bold text-emerald-700 ring-1 ring-emerald-100"
+          >
+            Report bug
+          </Link>
         </footer>
       </main>
     </div>

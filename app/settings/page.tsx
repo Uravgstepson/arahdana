@@ -533,11 +533,13 @@ export default function SettingsPage() {
         <h2 className="text-lg font-semibold text-stone-950">Data tools</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <SettingsLink href="/portfolio" title="CSV import" />
+          <SettingsLink href="/goals" title="Goals/DCA" />
           <SettingsLink href="/market-prices" title="Harga pasar" />
           <SettingsLink href="/integrations" title="Integrasi" />
           <SettingsLink href="/onboarding" title="Onboarding" />
           <SettingsLink href="/changelog" title="Changelog" />
           <SettingsLink href="/feedback" title="Feedback beta" />
+          <SettingsLink href="/beta-test" title="Report bug" />
           <SettingsLink href="/notifications" title="Notifikasi" />
           <SettingsLink href="/reports" title="Reports" />
           <SettingsLink href="/watchlist" title="Pantauan" />

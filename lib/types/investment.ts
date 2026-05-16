@@ -252,6 +252,32 @@ export type AlertCheckResult = {
   checkedAt: string;
 };
 
+export type SmartAlertUrgency = "low" | "medium" | "high";
+
+export type SmartAlert = {
+  id: string;
+  type:
+    | "allocation_concentration"
+    | "health_score"
+    | "holding_loss"
+    | "watchlist_buy"
+    | "avoid_signal"
+    | "buy_zone"
+    | "high_volatility"
+    | "dca_due"
+    | "goal_behind"
+    | "defensive_cash";
+  title: string;
+  whatHappened: string;
+  whyItMatters: string;
+  suggestedAction: string;
+  urgency: SmartAlertUrgency;
+  sourceId?: string;
+  sourceLabel?: string;
+  notificationType: NotificationType;
+  createdAt: string;
+};
+
 export type ReportType = "weekly" | "monthly" | "quarterly";
 
 export type ReportScoreSet = {
@@ -340,6 +366,31 @@ export type BetaSignup = {
   email: string;
   investmentExperience: BetaInvestmentExperience;
   feedbackInterest: string;
+  createdAt: string;
+  storageMode?: "supabase" | "local";
+};
+
+export type BetaTestChecklistKey =
+  | "create_account"
+  | "add_portfolio"
+  | "refresh_prices"
+  | "analyze_ticker"
+  | "create_goal"
+  | "create_alert"
+  | "write_journal"
+  | "generate_report"
+  | "export_backup"
+  | "test_mobile";
+
+export type BetaTestFeedback = {
+  id: string;
+  rating: number;
+  confusing: string;
+  useful: string;
+  bugs: string;
+  featureRequest: string;
+  checklist: Partial<Record<BetaTestChecklistKey, boolean>>;
+  email?: string | null;
   createdAt: string;
   storageMode?: "supabase" | "local";
 };

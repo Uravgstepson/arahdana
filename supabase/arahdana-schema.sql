@@ -178,6 +178,22 @@ create table if not exists public.beta_signups (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.beta_test_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  local_id text,
+  rating integer not null default 4,
+  confusing text not null default '',
+  useful text not null default '',
+  bugs text not null default '',
+  feature_request text not null default '',
+  checklist jsonb not null default '{}'::jsonb,
+  email text,
+  app_version text not null default 'ArahDana unknown',
+  page_url text,
+  created_at timestamptz not null default now()
+);
+
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists display_name text;
 alter table public.profiles add column if not exists created_at timestamptz not null default now();
@@ -309,6 +325,19 @@ alter table public.beta_signups add column if not exists investment_experience t
 alter table public.beta_signups add column if not exists feedback_interest text not null default '';
 alter table public.beta_signups add column if not exists created_at timestamptz not null default now();
 
+alter table public.beta_test_feedback add column if not exists user_id uuid references auth.users(id) on delete set null;
+alter table public.beta_test_feedback add column if not exists local_id text;
+alter table public.beta_test_feedback add column if not exists rating integer not null default 4;
+alter table public.beta_test_feedback add column if not exists confusing text not null default '';
+alter table public.beta_test_feedback add column if not exists useful text not null default '';
+alter table public.beta_test_feedback add column if not exists bugs text not null default '';
+alter table public.beta_test_feedback add column if not exists feature_request text not null default '';
+alter table public.beta_test_feedback add column if not exists checklist jsonb not null default '{}'::jsonb;
+alter table public.beta_test_feedback add column if not exists email text;
+alter table public.beta_test_feedback add column if not exists app_version text not null default 'ArahDana unknown';
+alter table public.beta_test_feedback add column if not exists page_url text;
+alter table public.beta_test_feedback add column if not exists created_at timestamptz not null default now();
+
 create unique index if not exists portfolios_user_id_name_key on public.portfolios (user_id, name);
 create unique index if not exists holdings_user_id_local_id_key on public.holdings (user_id, local_id);
 create unique index if not exists watchlist_items_user_id_local_id_key on public.watchlist_items (user_id, local_id);
@@ -330,6 +359,7 @@ alter table public.goal_contributions enable row level security;
 alter table public.alert_rules enable row level security;
 alter table public.portfolio_reports enable row level security;
 alter table public.beta_signups enable row level security;
+alter table public.beta_test_feedback enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
@@ -627,6 +657,20 @@ on public.beta_signups
 for insert
 to anon, authenticated
 with check (true);
+
+drop policy if exists "beta_test_feedback_insert_own" on public.beta_test_feedback;
+create policy "beta_test_feedback_insert_own"
+on public.beta_test_feedback
+for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "beta_test_feedback_select_own" on public.beta_test_feedback;
+create policy "beta_test_feedback_select_own"
+on public.beta_test_feedback
+for select
+to authenticated
+using ((select auth.uid()) = user_id);
 
 -- Refresh PostgREST schema cache after table/policy changes.
 -- This prevents PGRST205 "table not found in schema cache" right after running the migration.

@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type {
   AlertRule,
   AlertType,
+  FinancialGoal,
+  GoalContribution,
   PortfolioItem,
+  SavedAnalysisResult,
+  SmartAlert,
   UserSettings,
   WatchlistItem,
 } from "@/lib/types/investment";
@@ -14,9 +18,15 @@ import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { loadCloudAlertRules, saveCloudAlertRules } from "@/lib/supabase/sync";
 import { nonNegativeNumber } from "@/lib/utils/format";
 import { checkAllAlerts, createNotificationsFromAlerts } from "@/lib/alerts/checkAlerts";
+import {
+  generateSmartAlerts,
+  generateSmartAlertsWithMarketData,
+  smartAlertToNotification,
+} from "@/lib/alerts/smartAlerts";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 
 type AlertForm = Omit<AlertRule, "id" | "createdAt">;
+type AlertMode = "auto" | "manual";
 
 const ALERT_TYPE_LABELS: Record<AlertType, string> = {
   price_below: "Price Below Target",
@@ -35,6 +45,12 @@ export default function AlertsPage() {
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [analysisResults, setAnalysisResults] = useState<SavedAnalysisResult[]>([]);
+  const [goals, setGoals] = useState<FinancialGoal[]>([]);
+  const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([]);
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
+  const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>([]);
+  const [alertMode, setAlertMode] = useState<AlertMode>("auto");
   const [isHydrated, setIsHydrated] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,17 +68,46 @@ export default function AlertsPage() {
 
     window.setTimeout(() => {
       void (async () => {
-        const [storedRules, storedPortfolio, storedWatchlist] = [
+        const [
+          storedRules,
+          storedPortfolio,
+          storedWatchlist,
+          storedAnalysisResults,
+          storedGoals,
+          storedGoalContributions,
+        ] = [
           localArahDanaStorage.readAlertRules(),
           localArahDanaStorage.readPortfolio(),
           localArahDanaStorage.readWatchlist(),
+          localArahDanaStorage.readAnalysisResults(),
+          localArahDanaStorage.readGoals(),
+          localArahDanaStorage.readGoalContributions(),
         ];
+        const storedSettings = normalizeAlertSettings(localArahDanaStorage.readSettings());
+        const localPortfolio = storedPortfolio ?? [];
+        const localWatchlist = storedWatchlist ?? [];
+        const localAnalysisResults = storedAnalysisResults ?? [];
+        const localGoals = storedGoals ?? [];
+        const localGoalContributions = storedGoalContributions ?? [];
+        const localSmartAlerts = generateSmartAlerts({
+          portfolio: localPortfolio,
+          watchlist: localWatchlist,
+          analysisResults: localAnalysisResults,
+          goals: localGoals,
+          goalContributions: localGoalContributions,
+          settings: storedSettings,
+        });
 
         if (!user) {
           if (!isMounted) return;
           setAlertRules(storedRules ?? []);
-          setPortfolio(storedPortfolio ?? []);
-          setWatchlist(storedWatchlist ?? []);
+          setPortfolio(localPortfolio);
+          setWatchlist(localWatchlist);
+          setAnalysisResults(localAnalysisResults);
+          setGoals(localGoals);
+          setGoalContributions(localGoalContributions);
+          setSettings(storedSettings);
+          setSmartAlerts(localSmartAlerts);
           setIsHydrated(true);
           return;
         }
@@ -78,8 +123,13 @@ export default function AlertsPage() {
           setAlertRules(storedRules ?? []);
           console.error("Failed to load cloud alert rules:", error);
         } finally {
-          setPortfolio(storedPortfolio ?? []);
-          setWatchlist(storedWatchlist ?? []);
+          setPortfolio(localPortfolio);
+          setWatchlist(localWatchlist);
+          setAnalysisResults(localAnalysisResults);
+          setGoals(localGoals);
+          setGoalContributions(localGoalContributions);
+          setSettings(storedSettings);
+          setSmartAlerts(localSmartAlerts);
           if (isMounted) setIsHydrated(true);
         }
       })();
@@ -171,6 +221,72 @@ export default function AlertsPage() {
     }
   }
 
+  async function runSmartCheck() {
+    setIsChecking(true);
+    setCheckMessage("");
+    setCheckError("");
+
+    try {
+      const latestPortfolio = localArahDanaStorage.readPortfolio() ?? portfolio;
+      const latestWatchlist = localArahDanaStorage.readWatchlist() ?? watchlist;
+      const latestAnalysisResults =
+        localArahDanaStorage.readAnalysisResults() ?? analysisResults;
+      const latestGoals = localArahDanaStorage.readGoals() ?? goals;
+      const latestGoalContributions =
+        localArahDanaStorage.readGoalContributions() ?? goalContributions;
+      const latestSettings = normalizeAlertSettings(localArahDanaStorage.readSettings());
+      const smartCheck = await generateSmartAlertsWithMarketData({
+        portfolio: latestPortfolio,
+        watchlist: latestWatchlist,
+        analysisResults: latestAnalysisResults,
+        goals: latestGoals,
+        goalContributions: latestGoalContributions,
+        settings: latestSettings,
+      });
+      const generatedAlerts = smartCheck.alerts;
+      const importantNotifications = generatedAlerts
+        .filter((alert) => alert.urgency === "high")
+        .map(smartAlertToNotification);
+
+      if (importantNotifications.length > 0) {
+        const storedNotifications = localArahDanaStorage.readNotifications() ?? [];
+        const existingIds = new Set(storedNotifications.map((item) => item.id));
+        localArahDanaStorage.writeNotifications([
+          ...importantNotifications.filter((item) => !existingIds.has(item.id)),
+          ...storedNotifications,
+        ]);
+        window.dispatchEvent(new Event("arahdana:notifications-updated"));
+      }
+
+      setPortfolio(latestPortfolio);
+      setWatchlist(latestWatchlist);
+      setAnalysisResults(latestAnalysisResults);
+      setGoals(latestGoals);
+      setGoalContributions(latestGoalContributions);
+      setSettings(latestSettings);
+      setSmartAlerts(generatedAlerts);
+      setLastCheckTime(new Date().toISOString());
+      setCheckMessage(
+        generatedAlerts.length > 0
+          ? `${generatedAlerts.length} smart signal${generatedAlerts.length !== 1 ? "s" : ""} found. High-urgency signals were sent to notifications.`
+          : "Smart check complete. No major signals found right now.",
+      );
+      if (smartCheck.failedMarketChecks > 0) {
+        setCheckError(
+          `${smartCheck.failedMarketChecks} market check${smartCheck.failedMarketChecks !== 1 ? "s" : ""} could not be refreshed. Saved data was still reviewed.`,
+        );
+      }
+    } catch (error) {
+      setCheckError(
+        error instanceof Error
+          ? error.message
+          : "Smart check could not run. Existing data was left unchanged.",
+      );
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
   function createAlert(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -250,6 +366,7 @@ export default function AlertsPage() {
   }
 
   const enabledCount = alertRules.filter((r) => r.enabled).length;
+  const highSmartCount = smartAlerts.filter((alert) => alert.urgency === "high").length;
 
   return (
     <div className="space-y-5">
@@ -266,14 +383,20 @@ export default function AlertsPage() {
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <HeaderMetric
-            label="Total rules"
-            value={String(alertRules.length)}
-            helper="All rules"
+            label={alertMode === "auto" ? "Smart signals" : "Total rules"}
+            value={alertMode === "auto" ? String(smartAlerts.length) : String(alertRules.length)}
+            helper={alertMode === "auto" ? "System generated" : "All rules"}
           />
           <HeaderMetric
-            label="Active"
-            value={String(enabledCount)}
-            helper={enabledCount === alertRules.length ? "All active" : "Some inactive"}
+            label={alertMode === "auto" ? "High urgency" : "Active"}
+            value={alertMode === "auto" ? String(highSmartCount) : String(enabledCount)}
+            helper={
+              alertMode === "auto"
+                ? "Sent to notifications"
+                : enabledCount === alertRules.length
+                  ? "All active"
+                  : "Some inactive"
+            }
           />
           <HeaderMetric
             label="Last checked"
@@ -282,26 +405,64 @@ export default function AlertsPage() {
           />
         </div>
 
+        <div className="mt-5 grid gap-2 rounded-[1.2rem] bg-white/8 p-1.5 ring-1 ring-white/10 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setAlertMode("auto")}
+            className={`min-h-11 rounded-[0.9rem] px-4 text-sm font-semibold ${
+              alertMode === "auto"
+                ? "bg-white text-stone-950"
+                : "text-white/72 hover:bg-white/10"
+            }`}
+          >
+            Auto Mode recommended
+          </button>
+          <button
+            type="button"
+            onClick={() => setAlertMode("manual")}
+            className={`min-h-11 rounded-[0.9rem] px-4 text-sm font-semibold ${
+              alertMode === "manual"
+                ? "bg-white text-stone-950"
+                : "text-white/72 hover:bg-white/10"
+            }`}
+          >
+            Manual Mode advanced
+          </button>
+        </div>
+
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => {
-              setEditingId(null);
-              setForm(createEmptyForm());
-              setIsFormOpen((current) => !current);
-            }}
-            className="min-h-12 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300"
-          >
-            {isFormOpen && !editingId ? "Close" : "New Alert"}
-          </button>
-          <button
-            type="button"
-            onClick={checkAlertsNow}
-            disabled={isChecking || alertRules.length === 0}
-            className="min-h-12 rounded-[1rem] bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/12 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isChecking ? "Checking..." : "Check Alerts Now"}
-          </button>
+          {alertMode === "auto" ? (
+            <button
+              type="button"
+              onClick={runSmartCheck}
+              disabled={isChecking}
+              className="min-h-12 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isChecking ? "Checking..." : "Run Smart Check"}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingId(null);
+                  setForm(createEmptyForm());
+                  setIsFormOpen((current) => !current);
+                }}
+                className="min-h-12 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300"
+              >
+                {isFormOpen && !editingId ? "Close" : "New Alert"}
+              </button>
+              <button
+                type="button"
+                onClick={checkAlertsNow}
+                disabled={isChecking || alertRules.length === 0}
+                className="min-h-12 rounded-[1rem] bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/12 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isChecking ? "Checking..." : "Check Alerts Now"}
+              </button>
+            </>
+          )}
         </div>
       </section>
 
@@ -329,54 +490,65 @@ export default function AlertsPage() {
         </div>
       )}
 
-      {/* Form */}
-      {isFormOpen && (
-        <AlertForm
-          form={form}
-          isEditing={editingId !== null}
-          onSubmit={createAlert}
-          onCancel={cancelEditing}
-          onChange={setForm}
-          watchlist={watchlist}
-          portfolio={portfolio}
+      {alertMode === "auto" ? (
+        <SmartAlertsSection
+          alerts={smartAlerts}
+          onRun={runSmartCheck}
+          isChecking={isChecking}
+          settings={settings}
         />
+      ) : (
+        <>
+          {isFormOpen && (
+            <AlertForm
+              form={form}
+              isEditing={editingId !== null}
+              onSubmit={createAlert}
+              onCancel={cancelEditing}
+              onChange={setForm}
+              watchlist={watchlist}
+              portfolio={portfolio}
+            />
+          )}
+
+          <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-lg font-semibold text-stone-950">Manual Alert Rules</h3>
+              <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
+                {alertRules.length} rule{alertRules.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {alertRules.length === 0 ? (
+              <div className="rounded-[1.2rem] border border-dashed border-stone-300 p-6 text-center">
+                <h4 className="font-semibold text-stone-950">No manual alerts yet</h4>
+                <p className="mt-1 text-sm text-stone-600">
+                  Auto Mode covers common signals. Create a manual rule only when you need a specific condition.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsFormOpen(true)}
+                  className="mt-4 rounded-[1rem] bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                >
+                  Create Alert
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {alertRules.map((rule) => (
+                  <AlertRuleCard
+                    key={rule.id}
+                    rule={rule}
+                    onEdit={() => startEditing(rule)}
+                    onDelete={() => deleteAlert(rule.id)}
+                    onToggle={() => toggleAlert(rule.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
       )}
-
-      {/* Alert Rules List */}
-      <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h3 className="text-lg font-semibold text-stone-950">Alert Rules</h3>
-          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
-            {alertRules.length} rule{alertRules.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-
-        {alertRules.length === 0 ? (
-          <div className="rounded-[1.2rem] border border-dashed border-stone-300 p-6 text-center">
-            <h4 className="font-semibold text-stone-950">No alerts yet</h4>
-            <p className="mt-1 text-sm text-stone-600">Create your first alert rule to get started.</p>
-            <button
-              type="button"
-              onClick={() => setIsFormOpen(true)}
-              className="mt-4 rounded-[1rem] bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm"
-            >
-              Create Alert
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {alertRules.map((rule) => (
-              <AlertRuleCard
-                key={rule.id}
-                rule={rule}
-                onEdit={() => startEditing(rule)}
-                onDelete={() => deleteAlert(rule.id)}
-                onToggle={() => toggleAlert(rule.id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
@@ -397,6 +569,98 @@ function HeaderMetric({
       <p className="mt-1 text-xs font-medium text-white/50">{helper}</p>
     </div>
   );
+}
+
+function SmartAlertsSection({
+  alerts,
+  onRun,
+  isChecking,
+  settings,
+}: {
+  alerts: SmartAlert[];
+  onRun: () => void;
+  isChecking: boolean;
+  settings: UserSettings;
+}) {
+  return (
+    <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-stone-950">Auto Smart Alerts</h3>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
+            ArahDana monitors portfolio concentration, saved analyzer verdicts, goals,
+            DCA rhythm, and your risk profile. These are decision-support signals,
+            not financial advice.
+          </p>
+          <p className="mt-2 text-xs font-medium text-stone-500">
+            Risk tolerance: {settings.riskTolerance}/100. Horizon: {settings.timeHorizon}.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRun}
+          disabled={isChecking}
+          className="min-h-11 rounded-[1rem] bg-stone-950 px-4 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isChecking ? "Checking..." : "Run Smart Check"}
+        </button>
+      </div>
+
+      {alerts.length === 0 ? (
+        <div className="mt-5 rounded-[1.2rem] border border-dashed border-stone-300 p-6 text-center">
+          <h4 className="font-semibold text-stone-950">No smart signals yet</h4>
+          <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-stone-600">
+            Run a check after adding portfolio, watchlist, analysis, or goal data.
+            If market data is unavailable, ArahDana will keep existing data intact.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {alerts.map((alert) => (
+            <SmartAlertCard key={alert.id} alert={alert} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SmartAlertCard({ alert }: { alert: SmartAlert }) {
+  return (
+    <article className="rounded-[1.25rem] border border-stone-200 bg-stone-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${urgencyClass(alert.urgency)}`}>
+            {alert.urgency} urgency
+          </span>
+          <h4 className="mt-3 font-semibold text-stone-950">{alert.title}</h4>
+          {alert.sourceLabel ? (
+            <p className="mt-1 text-xs font-medium text-stone-500">{alert.sourceLabel}</p>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-4 space-y-3 text-sm leading-6 text-stone-700">
+        <SignalBlock label="What happened" text={alert.whatHappened} />
+        <SignalBlock label="Why it matters" text={alert.whyItMatters} />
+        <SignalBlock label="Suggested action" text={alert.suggestedAction} />
+      </div>
+    </article>
+  );
+}
+
+function SignalBlock({ label, text }: { label: string; text: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">{label}</p>
+      <p className="mt-1 text-stone-700">{text}</p>
+    </div>
+  );
+}
+
+function urgencyClass(urgency: SmartAlert["urgency"]) {
+  if (urgency === "high") return "bg-rose-100 text-rose-800";
+  if (urgency === "medium") return "bg-amber-100 text-amber-800";
+  return "bg-emerald-100 text-emerald-800";
 }
 
 function AlertForm({

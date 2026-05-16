@@ -1,16 +1,8 @@
-import type {
-  PortfolioItem,
-  RiskCategory,
-  TimeHorizon,
-} from "@/lib/types/investment";
+import type { PortfolioItem, TimeHorizon } from "@/lib/types/investment";
 import {
   computePortfolioCurrentPrice,
   computePortfolioMetrics,
 } from "./valuation";
-import {
-  calculateVolatility,
-  calculateMaxDrawdown,
-} from "@/lib/analysis/analyzeInvestment";
 
 export type HealthScoreResult = {
   totalScore: number;
@@ -34,290 +26,177 @@ type PortfolioValuationSettings = {
   timeHorizon?: TimeHorizon;
 };
 
-interface InstrumentData {
+type InstrumentData = {
   item: PortfolioItem;
   allocation: number;
   currentValue: number;
-}
+};
 
-/**
- * Calculate diversification score based on:
- * - Number of instruments (max points at 10+)
- * - Herfindahl index (concentration measure)
- * - Asset type diversity
- */
-function calculateDiversificationScore(portfolio: InstrumentData[]): number {
+function calculateDiversificationScore(portfolio: InstrumentData[]) {
   if (portfolio.length === 0) return 0;
 
-  // Number of instruments: max 40 points at 10+ instruments
   const instrumentCount = Math.min(portfolio.length, 10);
   const instrumentPoints = (instrumentCount / 10) * 40;
-
-  // Herfindahl-Hirschman Index (HHI) for concentration
-  // Perfect diversity = 0 points deducted, concentration = points deducted
-  let hhi = 0;
-  for (const item of portfolio) {
-    hhi += Math.pow(item.allocation, 2);
-  }
+  const hhi = portfolio.reduce((sum, item) => sum + item.allocation ** 2, 0);
   const concentrationPenalty = Math.min(25, hhi * 100);
-
-  // Asset type diversity: check how many types are represented
   const typeSet = new Set(portfolio.map((item) => item.item.type));
   const typePoints = Math.min(20, typeSet.size * 3);
 
-  const score = instrumentPoints + typePoints - concentrationPenalty;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return clampScore(instrumentPoints + typePoints - concentrationPenalty);
 }
 
-/**
- * Calculate allocation balance score based on:
- * - Cash/stable allocation (15%)
- * - Bond allocation (20%)
- * - Equity allocation (30%)
- * - Overall balance (35%)
- */
 function calculateAllocationScore(
   portfolio: InstrumentData[],
-  riskTolerance: number = 5,
-): number {
+  riskTolerance = 15,
+) {
   if (portfolio.length === 0) return 0;
 
-  // Define asset categories
-  const stableTypes = ["cash_savings", "money_market_fund"];
-  const bondTypes = ["bond", "bond_fund"];
-  const equityTypes = ["equity_fund", "stock", "mixed_fund"];
+  const stableTypes = new Set(["cash_savings", "money_market_fund"]);
+  const bondTypes = new Set(["bond", "bond_fund"]);
+  const equityTypes = new Set(["equity_fund", "stock", "mixed_fund"]);
 
   let stableAllocation = 0;
   let bondAllocation = 0;
   let equityAllocation = 0;
 
-  for (const item of portfolio) {
-    if (stableTypes.includes(item.item.type)) {
-      stableAllocation += item.allocation;
-    } else if (bondTypes.includes(item.item.type)) {
-      bondAllocation += item.allocation;
-    } else if (equityTypes.includes(item.item.type)) {
-      equityAllocation += item.allocation;
-    }
-  }
+  portfolio.forEach((item) => {
+    const allocation = item.allocation * 100;
+    if (stableTypes.has(item.item.type)) stableAllocation += allocation;
+    if (bondTypes.has(item.item.type)) bondAllocation += allocation;
+    if (equityTypes.has(item.item.type)) equityAllocation += allocation;
+  });
 
-  // Risk tolerance-based targets
-  let stableTarget = 40; // Default target
+  let stableTarget = 35;
   let bondTarget = 30;
-  let equityTarget = 30;
+  let equityTarget = 35;
 
   if (riskTolerance <= 10) {
-    // Defensive: more stable
     stableTarget = 50;
     bondTarget = 35;
     equityTarget = 15;
-  } else if (riskTolerance <= 20) {
-    // Balanced
-    stableTarget = 35;
-    bondTarget = 30;
-    equityTarget = 35;
-  } else {
-    // Aggressive
+  } else if (riskTolerance > 20) {
     stableTarget = 20;
     bondTarget = 20;
     equityTarget = 60;
   }
 
-  // Calculate deviation from targets
-  const stableDeviation = Math.abs(stableAllocation - stableTarget);
-  const bondDeviation = Math.abs(bondAllocation - bondTarget);
-  const equityDeviation = Math.abs(equityAllocation - equityTarget);
+  const averageDeviation =
+    (Math.abs(stableAllocation - stableTarget) +
+      Math.abs(bondAllocation - bondTarget) +
+      Math.abs(equityAllocation - equityTarget)) /
+    3;
 
-  const avgDeviation = (stableDeviation + bondDeviation + equityDeviation) / 3;
-  const deviationScore = Math.max(0, 100 - avgDeviation * 2);
-
-  return Math.round(deviationScore);
+  return clampScore(100 - averageDeviation * 2);
 }
 
-/**
- * Calculate risk exposure score based on:
- * - Overall portfolio volatility
- * - Maximum drawdown
- * - Risk category distribution
- */
-function calculateRiskScore(
-  portfolio: InstrumentData[],
-  riskTolerance: number = 5,
-): number {
+function calculateRiskScore(portfolio: InstrumentData[], riskTolerance = 15) {
   if (portfolio.length === 0) return 50;
 
-  // Count risk categories
-  let lowRiskCount = 0;
-  let mediumRiskCount = 0;
-  let highRiskCount = 0;
-
-  for (const item of portfolio) {
-    if (item.item.riskCategory === "low") lowRiskCount++;
-    else if (item.item.riskCategory === "medium") mediumRiskCount++;
-    else if (item.item.riskCategory === "high") highRiskCount++;
-  }
-
-  // Calculate risk distribution score
-  let riskScore = 50;
-
-  if (riskTolerance <= 10) {
-    // Defensive: should have mostly low risk
-    const lowRiskPct = (lowRiskCount / portfolio.length) * 100;
-    const highRiskPct = (highRiskCount / portfolio.length) * 100;
-    riskScore = 50 + (lowRiskPct * 0.3 - highRiskPct * 0.5);
-  } else if (riskTolerance <= 20) {
-    // Balanced: balanced distribution
-    const balanceScore = 100 - Math.abs(lowRiskCount - mediumRiskCount) * 5;
-    riskScore = Math.max(30, balanceScore);
-  } else {
-    // Aggressive: can tolerate high risk
-    const highRiskPct = (highRiskCount / portfolio.length) * 100;
-    riskScore = 50 + highRiskPct * 0.3;
-  }
-
-  return Math.round(Math.max(0, Math.min(100, riskScore)));
-}
-
-/**
- * Calculate performance score based on:
- * - Current profit/loss vs invested
- * - Consistency (if multiple items exist)
- * - Maximum drawdown experience
- */
-function calculatePerformanceScore(
-  portfolio: PortfolioItem[],
-  settings: PortfolioValuationSettings = {},
-): number {
-  if (portfolio.length === 0) return 50;
-
-  const metrics = computePortfolioMetrics(portfolio, settings);
-  const profitPercent = metrics.profitPercent;
-
-  // Base score on performance
-  let performanceScore = 50;
-
-  if (profitPercent > 20) {
-    performanceScore = 85;
-  } else if (profitPercent > 10) {
-    performanceScore = 75;
-  } else if (profitPercent > 0) {
-    performanceScore = 65;
-  } else if (profitPercent > -10) {
-    performanceScore = 50;
-  } else if (profitPercent > -25) {
-    performanceScore = 35;
-  } else {
-    performanceScore = 20;
-  }
-
-  return Math.round(performanceScore);
-}
-
-/**
- * Calculate concentration risk score based on:
- * - Largest single position
- * - Top 3 positions
- * - Overall distribution
- */
-function calculateConcentrationScore(portfolio: InstrumentData[]): number {
-  if (portfolio.length === 0) return 50;
-
-  const sortedByAllocation = [...portfolio].sort(
-    (a, b) => b.allocation - a.allocation,
+  const counts = portfolio.reduce(
+    (acc, item) => {
+      acc[item.item.riskCategory] += 1;
+      return acc;
+    },
+    { low: 0, medium: 0, high: 0 },
   );
 
-  const largestPosition = sortedByAllocation[0]?.allocation ?? 0;
-  const top3Total = sortedByAllocation
+  let score = 70;
+  if (riskTolerance <= 10) {
+    const lowRiskPercent = (counts.low / portfolio.length) * 100;
+    const highRiskPercent = (counts.high / portfolio.length) * 100;
+    score = 55 + lowRiskPercent * 0.35 - highRiskPercent * 0.55;
+  } else if (riskTolerance <= 20) {
+    score = 82 - Math.abs(counts.low - counts.medium) * 5 - counts.high * 4;
+  } else {
+    const highRiskPercent = (counts.high / portfolio.length) * 100;
+    score = 60 + highRiskPercent * 0.25;
+  }
+
+  return clampScore(score);
+}
+
+function calculatePerformanceScore(
+  portfolio: PortfolioItem[],
+  settings: PortfolioValuationSettings,
+) {
+  if (portfolio.length === 0) return 50;
+  const profitPercent = computePortfolioMetrics(portfolio, settings).profitPercent;
+
+  if (profitPercent > 20) return 85;
+  if (profitPercent > 10) return 75;
+  if (profitPercent > 0) return 65;
+  if (profitPercent > -10) return 50;
+  if (profitPercent > -25) return 35;
+  return 20;
+}
+
+function calculateConcentrationScore(portfolio: InstrumentData[]) {
+  if (portfolio.length === 0) return 50;
+
+  const sorted = [...portfolio].sort((a, b) => b.allocation - a.allocation);
+  const largestPosition = sorted[0]?.allocation ?? 0;
+  const top3Total = sorted
     .slice(0, 3)
     .reduce((sum, item) => sum + item.allocation, 0);
 
-  let concentrationScore = 80;
+  let score = 86;
+  if (largestPosition > 0.5) score -= 45;
+  else if (largestPosition > 0.35) score -= 28;
+  else if (largestPosition > 0.25) score -= 16;
+  else if (largestPosition > 0.15) score -= 6;
 
-  // Penalize large single positions
-  if (largestPosition > 0.5) {
-    concentrationScore -= 40; // Critical
-  } else if (largestPosition > 0.35) {
-    concentrationScore -= 25;
-  } else if (largestPosition > 0.25) {
-    concentrationScore -= 15;
-  } else if (largestPosition > 0.15) {
-    concentrationScore -= 5;
-  }
+  if (top3Total > 0.8) score -= 12;
+  else if (top3Total > 0.65) score -= 6;
 
-  // Penalize high top-3 concentration
-  if (top3Total > 0.8) {
-    concentrationScore -= 10;
-  } else if (top3Total > 0.65) {
-    concentrationScore -= 5;
-  }
-
-  return Math.round(Math.max(0, Math.min(100, concentrationScore)));
+  return clampScore(score);
 }
 
-/**
- * Generate warnings based on portfolio health
- */
 function generateWarnings(
   portfolio: InstrumentData[],
-  portfolioItems: PortfolioItem[],
   metrics: ReturnType<typeof computePortfolioMetrics>,
   settings: PortfolioValuationSettings,
-): string[] {
+) {
   const warnings: string[] = [];
-
   if (portfolio.length === 0) {
     warnings.push("Portfolio is empty. Start adding investments.");
     return warnings;
   }
 
-  // Check for single position > 50%
-  const largestPos = Math.max(...portfolio.map((item) => item.allocation));
-  if (largestPos > 0.5) {
+  const largestPosition = Math.max(...portfolio.map((item) => item.allocation));
+  if (largestPosition > 0.5) {
     warnings.push(
-      `⚠️ One asset represents ${Math.round(largestPos * 100)}% of portfolio (concentration risk)`,
+      `One asset represents ${Math.round(largestPosition * 100)}% of the portfolio.`,
     );
   }
 
-  // Check for too few instruments
   if (portfolio.length < 3) {
-    warnings.push("⚠️ Portfolio lacks diversification (<3 instruments)");
+    warnings.push("Portfolio has limited diversification with fewer than 3 instruments.");
   }
 
-  // Check equity exposure vs risk tolerance
-  const equityTypes = ["equity_fund", "stock", "mixed_fund"];
+  const equityTypes = new Set(["equity_fund", "stock", "mixed_fund"]);
+  const stableTypes = new Set(["cash_savings", "money_market_fund"]);
   const equityAllocation = portfolio
-    .filter((item) => equityTypes.includes(item.item.type))
+    .filter((item) => equityTypes.has(item.item.type))
+    .reduce((sum, item) => sum + item.allocation, 0);
+  const stableAllocation = portfolio
+    .filter((item) => stableTypes.has(item.item.type))
     .reduce((sum, item) => sum + item.allocation, 0);
 
   if ((settings.riskTolerance ?? 15) <= 10 && equityAllocation > 0.4) {
-    warnings.push(
-      "⚠️ Equity exposure too high for your conservative risk tolerance",
-    );
+    warnings.push("Equity exposure is high for a conservative risk profile.");
   }
-
-  // Check for significant losses
   if (metrics.profitPercent < -25) {
-    warnings.push("⚠️ Portfolio has declined significantly (>-25%)");
+    warnings.push("Portfolio has declined more than 25%. Review thesis and risk exposure calmly.");
   } else if (metrics.profitPercent < -10) {
-    warnings.push("⚠️ Portfolio in drawdown (10-25%)");
+    warnings.push("Portfolio is in a 10-25% drawdown. Review position sizing and assumptions.");
   }
-
-  // Check stable asset allocation
-  const stableTypes = ["cash_savings", "money_market_fund"];
-  const stableAllocation = portfolio
-    .filter((item) => stableTypes.includes(item.item.type))
-    .reduce((sum, item) => sum + item.allocation, 0);
-
   if (stableAllocation === 0) {
-    warnings.push("ℹ️ No stable asset allocation (cash/money market)");
+    warnings.push("No stable asset allocation is recorded for cash or money market funds.");
   }
 
   return warnings;
 }
 
-/**
- * Generate strengths based on portfolio health
- */
 function generateStrengths(
   diversificationScore: number,
   allocationScore: number,
@@ -325,94 +204,59 @@ function generateStrengths(
   performanceScore: number,
   concentrationScore: number,
   portfolio: InstrumentData[],
-): string[] {
+) {
   const strengths: string[] = [];
+  if (diversificationScore >= 70) strengths.push("Good diversification across instruments.");
+  if (allocationScore >= 70) strengths.push("Allocation is aligned with your risk profile.");
+  if (riskScore >= 70) strengths.push("Risk exposure is within a reasonable range.");
+  if (performanceScore >= 75) strengths.push("Performance is currently constructive.");
+  else if (performanceScore >= 65) strengths.push("Portfolio return is currently positive.");
+  if (concentrationScore >= 75) strengths.push("No excessive single-position concentration.");
+  if (portfolio.length >= 5) strengths.push("Holding count supports regular diversification review.");
 
-  if (diversificationScore >= 70) {
-    strengths.push("Good diversification across instruments");
-  }
-
-  if (allocationScore >= 70) {
-    strengths.push("Well-balanced asset allocation");
-  }
-
-  if (riskScore >= 70) {
-    strengths.push("Risk exposure aligned with tolerance");
-  }
-
-  if (performanceScore >= 75) {
-    strengths.push("Strong performance");
-  } else if (performanceScore >= 65) {
-    strengths.push("Positive returns on investment");
-  }
-
-  if (concentrationScore >= 75) {
-    strengths.push("No excessive concentration in single assets");
-  }
-
-  if (portfolio.length >= 5) {
-    strengths.push("Sufficient number of holdings");
-  }
-
-  return strengths.length > 0 ? strengths : ["Portfolio is established"];
+  return strengths.length > 0 ? strengths : ["Portfolio is established and ready to review."];
 }
 
-/**
- * Generate recommended actions based on portfolio health
- */
 function generateRecommendedActions(
   diversificationScore: number,
   allocationScore: number,
   riskScore: number,
   concentrationScore: number,
   portfolio: InstrumentData[],
-  warnings: string[],
-): string[] {
+) {
   const actions: string[] = [];
 
-  // Diversification recommendations
   if (diversificationScore < 50) {
-    actions.push("Add more investment instruments to improve diversification");
+    actions.push("Add more instruments before increasing position sizes.");
   } else if (diversificationScore < 70) {
-    actions.push("Consider expanding to at least 5-7 different holdings");
+    actions.push("Consider expanding toward 5-7 holdings over time.");
   }
 
-  // Allocation recommendations
   if (allocationScore < 50) {
-    actions.push(
-      "Rebalance your portfolio to better match your risk tolerance",
-    );
+    actions.push("Rebalance allocation toward your risk tolerance.");
   } else if (allocationScore < 70) {
-    actions.push("Fine-tune allocation across asset categories");
+    actions.push("Fine-tune stable, bond, and equity exposure.");
   }
 
-  // Risk recommendations
   if (riskScore < 50) {
-    actions.push("Review risk exposure against your risk tolerance profile");
+    actions.push("Review risk exposure before adding new high-risk assets.");
   }
-
-  // Concentration recommendations
   if (concentrationScore < 60) {
-    actions.push("Reduce concentration by distributing capital more evenly");
+    actions.push("Reduce reliance on the largest position gradually.");
   }
 
-  // Cash position
-  const stableTypes = ["cash_savings", "money_market_fund"];
+  const stableTypes = new Set(["cash_savings", "money_market_fund"]);
   const stableAllocation = portfolio
-    .filter((item) => stableTypes.includes(item.item.type))
+    .filter((item) => stableTypes.has(item.item.type))
     .reduce((sum, item) => sum + item.allocation, 0);
 
   if (stableAllocation < 0.1) {
-    actions.push("Maintain 10-20% in stable/cash allocation for liquidity");
+    actions.push("Keep a small stable allocation for liquidity and flexibility.");
   }
 
-  // Return top 2 recommendations
   return actions.slice(0, 2);
 }
 
-/**
- * Calculate overall portfolio health score
- */
 export function calculatePortfolioHealthScore(
   portfolio: PortfolioItem[],
   settings: PortfolioValuationSettings = {},
@@ -426,49 +270,34 @@ export function calculatePortfolioHealthScore(
       riskScore: 50,
       performanceScore: 0,
       concentrationScore: 50,
-      summary:
-        "Your portfolio is empty. Start by adding your first investment.",
+      summary: "Your portfolio is empty. Add a first holding to start the review.",
       strengths: [],
-      weaknesses: ["Portfolio has no holdings"],
-      recommendedActions: ["Add your first investment to get started"],
-      warnings: ["Portfolio is empty"],
+      weaknesses: ["Portfolio has no holdings."],
+      recommendedActions: ["Add your first investment to get started."],
+      warnings: ["Portfolio is empty."],
     };
   }
 
-  // Prepare instrument data with allocations and current values
   const instrumentData: InstrumentData[] = [];
   let totalValue = 0;
 
-  for (const item of portfolio) {
+  portfolio.forEach((item) => {
     const { currentPriceUsed } = computePortfolioCurrentPrice(item, settings);
     const currentValue = currentPriceUsed * item.quantity;
     totalValue += currentValue;
-    instrumentData.push({
-      item,
-      allocation: 0, // Will be calculated after we know total value
-      currentValue,
-    });
-  }
+    instrumentData.push({ item, allocation: 0, currentValue });
+  });
 
-  // Calculate allocations
-  for (const data of instrumentData) {
-    data.allocation = totalValue > 0 ? data.currentValue / totalValue : 0;
-  }
+  instrumentData.forEach((item) => {
+    item.allocation = totalValue > 0 ? item.currentValue / totalValue : 0;
+  });
 
-  // Calculate individual scores
   const diversificationScore = calculateDiversificationScore(instrumentData);
-  const allocationScore = calculateAllocationScore(
-    instrumentData,
-    settings.riskTolerance ?? 15,
-  );
-  const riskScore = calculateRiskScore(
-    instrumentData,
-    settings.riskTolerance ?? 15,
-  );
+  const allocationScore = calculateAllocationScore(instrumentData, settings.riskTolerance ?? 15);
+  const riskScore = calculateRiskScore(instrumentData, settings.riskTolerance ?? 15);
   const performanceScore = calculatePerformanceScore(portfolio, settings);
   const concentrationScore = calculateConcentrationScore(instrumentData);
 
-  // Calculate weighted total score
   const totalScore = Math.round(
     diversificationScore * 0.2 +
       allocationScore * 0.25 +
@@ -476,31 +305,9 @@ export function calculatePortfolioHealthScore(
       performanceScore * 0.15 +
       concentrationScore * 0.2,
   );
-
-  // Determine grade
-  let grade: HealthScoreResult["grade"];
-  if (totalScore >= 85) {
-    grade = "Excellent";
-  } else if (totalScore >= 70) {
-    grade = "Healthy";
-  } else if (totalScore >= 55) {
-    grade = "Needs Attention";
-  } else if (totalScore >= 40) {
-    grade = "Risky";
-  } else {
-    grade = "Critical";
-  }
-
-  // Compute portfolio metrics
+  const grade = gradeFromScore(totalScore);
   const metrics = computePortfolioMetrics(portfolio, settings);
-
-  // Generate insights
-  const warnings = generateWarnings(
-    instrumentData,
-    portfolio,
-    metrics,
-    settings,
-  );
+  const warnings = generateWarnings(instrumentData, metrics, settings);
   const strengths = generateStrengths(
     diversificationScore,
     allocationScore,
@@ -515,38 +322,7 @@ export function calculatePortfolioHealthScore(
     riskScore,
     concentrationScore,
     instrumentData,
-    warnings,
   );
-
-  // Generate summary
-  const summaryParts: string[] = [];
-  if (grade === "Excellent") {
-    summaryParts.push(
-      "Your portfolio is in excellent health with strong diversification and balanced allocation.",
-    );
-  } else if (grade === "Healthy") {
-    summaryParts.push("Your portfolio is healthy and well-structured.");
-  } else if (grade === "Needs Attention") {
-    summaryParts.push("Your portfolio needs attention in some areas.");
-  } else if (grade === "Risky") {
-    summaryParts.push("Your portfolio carries elevated risk levels.");
-  } else {
-    summaryParts.push(
-      "Your portfolio requires immediate attention and rebalancing.",
-    );
-  }
-
-  if (metrics.profitPercent > 0) {
-    summaryParts.push(
-      `Currently showing ${formatPercent(metrics.profitPercent)} returns.`,
-    );
-  } else if (metrics.profitPercent < 0) {
-    summaryParts.push(
-      `Currently in drawdown of ${formatPercent(Math.abs(metrics.profitPercent))}.`,
-    );
-  }
-
-  const summary = summaryParts.join(" ");
 
   return {
     totalScore,
@@ -556,20 +332,47 @@ export function calculatePortfolioHealthScore(
     riskScore,
     performanceScore,
     concentrationScore,
-    summary,
+    summary: buildSummary(grade, metrics.profitPercent),
     strengths,
     weaknesses: warnings
-      .filter((w) => w.startsWith("⚠️"))
-      .map((w) => w.replace("⚠️ ", "")),
+      .filter((warning) => !warning.startsWith("No stable asset allocation"))
+      .slice(0, 4),
     recommendedActions,
     warnings,
   };
 }
 
-/**
- * Helper function to format percent for summary
- */
-function formatPercent(value: number): string {
+function gradeFromScore(score: number): HealthScoreResult["grade"] {
+  if (score >= 85) return "Excellent";
+  if (score >= 70) return "Healthy";
+  if (score >= 55) return "Needs Attention";
+  if (score >= 40) return "Risky";
+  return "Critical";
+}
+
+function buildSummary(grade: HealthScoreResult["grade"], profitPercent: number) {
+  const opening: Record<HealthScoreResult["grade"], string> = {
+    Excellent: "Portfolio structure looks strong and balanced.",
+    Healthy: "Portfolio is healthy with a few areas to keep monitoring.",
+    "Needs Attention": "Portfolio is usable, but a few risks deserve review.",
+    Risky: "Portfolio risk is elevated and should be reviewed calmly.",
+    Critical: "Portfolio needs a focused review before adding more risk.",
+  };
+  const returnText =
+    profitPercent > 0
+      ? `Current return is ${formatPercent(profitPercent)}.`
+      : profitPercent < 0
+        ? `Current drawdown is ${formatPercent(Math.abs(profitPercent))}.`
+        : "Current return is flat.";
+
+  return `${opening[grade]} ${returnText}`;
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function formatPercent(value: number) {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
 }
