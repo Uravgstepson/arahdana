@@ -1,15 +1,15 @@
 {
   "name": "ArahDana",
   "short_name": "ArahDana",
-  "description": "Home pendukung keputusan investasi Indonesia",
+  "description": "Ruang aman untuk portofolio, DCA planner, analisis pasar, dan review investasi.",
   "id": "/",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],
-  "orientation": "portrait-primary",
-  "background_color": "#edf3f7",
-  "theme_color": "#edf3f7",
+  "orientation": "portrait",
+  "background_color": "#062D20",
+  "theme_color": "#00C878",
   "categories": ["finance", "productivity"],
   "lang": "id",
   "dir": "ltr",
@@ -31,21 +31,34 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icons/arahdana-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "Portofolio",
-      "short_name": "Portofolio",
-      "description": "Buka halaman portofolio",
-      "url": "/portfolio",
+      "name": "Home",
+      "short_name": "Home",
+      "description": "Buka dashboard ArahDana",
+      "url": "/dashboard",
       "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Analisis",
       "short_name": "Analisis",
-      "description": "Buka halaman analisis investasi",
+      "description": "Buka analisis investasi",
       "url": "/analyzer",
+      "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Goals",
+      "short_name": "Goals",
+      "description": "Buka target investasi",
+      "url": "/goals",
       "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
     }
   ]

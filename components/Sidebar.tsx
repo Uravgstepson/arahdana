@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { BrandMark } from "@/components/BrandMark";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import {
   normalizeLanguage,
@@ -43,16 +44,9 @@ const featureMenu: FeatureItem[] = [
     icon: "portfolio",
   },
   {
-    href: "/watchlist",
-    label: "Pantau",
-    labelKey: "watch",
-    helper: "Watchlist dan target beli",
-    icon: "watchlist",
-  },
-  {
-    href: "/market-prices",
-    label: "Harga Pasar",
-    helper: "Data harga dan sumber pasar",
+    href: "/market",
+    label: "Market",
+    helper: "Search, pantau, harga, insight",
     icon: "market",
   },
   {
@@ -69,31 +63,10 @@ const featureMenu: FeatureItem[] = [
     icon: "alerts",
   },
   {
-    href: "/journal",
-    label: "Journal",
-    labelKey: "journal",
-    helper: "Catatan keputusan investasi",
-    icon: "journal",
-  },
-  {
-    href: "/reports",
-    label: "Reports",
-    labelKey: "reports",
-    helper: "Ringkasan review berkala",
+    href: "/review",
+    label: "Review",
+    helper: "Jurnal, laporan, health score",
     icon: "reports",
-  },
-  {
-    href: "/portfolio#health-score",
-    label: "Health Score",
-    labelKey: "healthScore",
-    helper: "Kesehatan portofolio",
-    icon: "health",
-  },
-  {
-    href: "/market-insight",
-    label: "Market Insight",
-    helper: "Konteks pasar Indonesia",
-    icon: "insight",
   },
 ];
 
@@ -108,11 +81,53 @@ export function Sidebar() {
   const [isBottomHidden, setIsBottomHidden] = useState(false);
   const lastScrollY = useRef(0);
   const scrollFrame = useRef<number | null>(null);
+  const idleRevealTimer = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const bottomNavRef = useRef<HTMLElement | null>(null);
+  const [drawerDragY, setDrawerDragY] = useState(0);
   const isFeatureActive = menuRoutes.has(pathname);
 
   useEffect(() => {
     lastScrollY.current = window.scrollY;
+
+    function clearIdleReveal() {
+      if (idleRevealTimer.current !== null) {
+        window.clearTimeout(idleRevealTimer.current);
+        idleRevealTimer.current = null;
+      }
+    }
+
+    function revealBottomNav() {
+      clearIdleReveal();
+      setIsBottomHidden(false);
+    }
+
+    function scheduleIdleReveal() {
+      clearIdleReveal();
+      idleRevealTimer.current = window.setTimeout(() => {
+        setIsBottomHidden(false);
+        idleRevealTimer.current = null;
+      }, 10_000);
+    }
+
+    function handleTouchStart(event: TouchEvent | PointerEvent) {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        bottomNavRef.current?.contains(target)
+      ) {
+        revealBottomNav();
+        return;
+      }
+
+      if (isMenuOpen || isNearPageTop() || isAtPageBottom()) {
+        revealBottomNav();
+        return;
+      }
+
+      setIsBottomHidden(true);
+      scheduleIdleReveal();
+    }
 
     function handleScroll() {
       if (scrollFrame.current !== null) return;
@@ -122,12 +137,14 @@ export function Sidebar() {
         const currentScrollY = window.scrollY;
         const delta = currentScrollY - lastScrollY.current;
 
-        if (currentScrollY < 48 || isMenuOpen) {
-          setIsBottomHidden(false);
+        if (isMenuOpen || isNearPageTop() || isAtPageBottom()) {
+          revealBottomNav();
         } else if (delta > 10) {
           setIsBottomHidden(true);
+          scheduleIdleReveal();
         } else if (delta < -10) {
           setIsBottomHidden(false);
+          scheduleIdleReveal();
         }
 
         lastScrollY.current = currentScrollY;
@@ -135,8 +152,13 @@ export function Sidebar() {
     }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("pointerdown", handleTouchStart, { passive: true });
     return () => {
       window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("pointerdown", handleTouchStart);
+      clearIdleReveal();
       if (scrollFrame.current !== null) {
         window.cancelAnimationFrame(scrollFrame.current);
         scrollFrame.current = null;
@@ -160,13 +182,15 @@ export function Sidebar() {
   }, [isMenuOpen]);
 
   useEffect(() => {
-    setIsMenuOpen(false);
+    const timeoutId = window.setTimeout(() => setIsMenuOpen(false), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [pathname]);
 
   return (
     <>
-      <aside className="motion-nav fixed inset-y-6 left-5 z-50 hidden w-[5.25rem] flex-col items-center rounded-[1.65rem] border border-white/50 bg-white/70 px-2 py-4 shadow-sm backdrop-blur-3xl lg:flex">
-        <nav className="flex flex-1 flex-col items-center justify-center gap-3" aria-label="Navigasi utama">
+      <aside className="motion-nav fixed inset-y-6 left-5 z-50 hidden w-[5rem] flex-col items-center rounded-[1.45rem] border border-white/12 bg-stone-950/68 px-2 py-4 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-[18px] lg:flex">
+        <BrandMark variant="icon" className="h-10 w-10 rounded-[1rem] bg-white/10 ring-1 ring-white/12" />
+        <nav className="flex flex-1 flex-col items-center justify-center gap-2.5" aria-label="Navigasi utama">
           <RailLink
             href="/dashboard"
             label={translate(language, "home")}
@@ -192,9 +216,10 @@ export function Sidebar() {
       </aside>
 
       <nav
+        ref={bottomNavRef}
         aria-label="Navigasi utama"
         className={cn(
-          "motion-nav fixed inset-x-4 bottom-4 z-50 grid grid-cols-3 rounded-[1.5rem] border border-white/60 bg-white/86 p-1.5 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-3xl transition-all duration-300 ease-out lg:hidden",
+          "motion-nav fixed inset-x-5 bottom-[calc(0.85rem+env(safe-area-inset-bottom))] z-50 mx-auto grid max-w-md grid-cols-3 rounded-[1.35rem] border border-white/12 bg-stone-950/76 p-1 shadow-[0_18px_44px_rgba(15,23,42,0.22)] backdrop-blur-[18px] transition-all duration-300 ease-out lg:hidden",
           isBottomHidden
             ? "translate-y-28 opacity-80"
             : "translate-y-0 opacity-100",
@@ -224,14 +249,24 @@ export function Sidebar() {
         <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="Menu fitur">
           <button
             type="button"
-            className="absolute inset-0 bg-stone-950/36 backdrop-blur-[2px]"
-            aria-label="Tutup menu"
+            className="absolute inset-0 bg-stone-950/48 backdrop-blur-sm"
+            aria-label="Tutup area menu"
             onClick={() => setIsMenuOpen(false)}
           />
           <div
-            className="motion-drawer absolute inset-x-0 bottom-0 mx-auto max-h-[82vh] w-full max-w-2xl overflow-hidden rounded-t-[2rem] border border-white/60 bg-white/95 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-24px_80px_rgba(15,23,42,0.22)] backdrop-blur-3xl lg:bottom-6 lg:rounded-[2rem]"
+            className="motion-drawer absolute inset-x-0 bottom-0 mx-auto max-h-[82vh] w-full max-w-2xl overflow-hidden rounded-t-[2rem] border border-stone-600/20 bg-stone-950/95 p-5 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-24px_80px_rgba(15,23,42,0.32)] backdrop-blur-[18px] lg:bottom-6 lg:rounded-[2rem]"
+            style={{
+              transform: drawerDragY ? `translateY(${drawerDragY}px)` : undefined,
+              transition: drawerDragY ? "none" : undefined,
+            }}
             onTouchStart={(event) => {
               touchStartY.current = event.touches[0]?.clientY ?? null;
+            }}
+            onTouchMove={(event) => {
+              const startY = touchStartY.current;
+              const currentY = event.touches[0]?.clientY;
+              if (startY === null || currentY === undefined) return;
+              setDrawerDragY(Math.max(0, Math.min(140, currentY - startY)));
             }}
             onTouchEnd={(event) => {
               const startY = touchStartY.current;
@@ -240,46 +275,37 @@ export function Sidebar() {
               if (startY !== null && endY && endY - startY > 72) {
                 setIsMenuOpen(false);
               }
+              setDrawerDragY(0);
             }}
           >
             <div className="motion-handle flex justify-center py-1">
-              <span className="h-1.5 w-11 rounded-full bg-stone-300" />
+              <span className="h-1.5 w-11 rounded-full bg-stone-400/30" />
             </div>
-            <div className="mt-3 flex items-center justify-between px-1">
-              <h2 className="text-2xl font-semibold tracking-tight text-stone-950">
+            <div className="mt-4 px-1">
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
                 Menu
               </h2>
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen(false)}
-                className="grid h-10 w-10 place-items-center rounded-full bg-stone-100 text-stone-600"
-                aria-label="Tutup menu"
-              >
-                <span aria-hidden="true" className="text-xl leading-none">
-                  x
-                </span>
-              </button>
             </div>
-            <div className="mt-4 grid max-h-[62vh] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+            <div className="mt-5 grid max-h-[62vh] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
               {featureMenu.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "motion-link flex min-h-[4.8rem] items-center gap-3 rounded-[1.35rem] px-4 text-left",
+                    "motion-link flex min-h-[4.8rem] items-center gap-3 rounded-[1.35rem] px-4 text-left transition-all 260ms cubic-bezier(0.16,1,0.3,1)",
                     pathname === item.href.split("#")[0]
-                      ? "bg-stone-950 text-white"
-                      : "bg-stone-100 text-stone-950 hover:bg-white",
+                      ? "bg-emerald-400/20 text-white ring-1 ring-emerald-500/30"
+                      : "bg-stone-900/40 text-stone-100 hover:bg-stone-900/60",
                   )}
                 >
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[1rem] bg-white/72 text-emerald-700 ring-1 ring-stone-200">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[1rem] bg-emerald-400/20 text-emerald-300 ring-1 ring-emerald-500/30">
                     <NavGlyph icon={item.icon} />
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">
                       {item.labelKey ? translate(language, item.labelKey) : item.label}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs font-medium text-stone-500">
+                    <span className="mt-0.5 block truncate text-xs font-medium text-stone-400">
                       {item.helper}
                     </span>
                   </span>
@@ -389,19 +415,19 @@ function BottomButton({
 
 function railClass(active: boolean) {
   return cn(
-    "motion-link grid h-12 w-12 place-items-center rounded-[1.1rem]",
+    "motion-link grid h-11 w-11 place-items-center rounded-[1rem] transition-all",
     active
-      ? "bg-stone-950 text-white shadow-sm"
-      : "text-stone-500 hover:bg-white/72 hover:text-stone-950",
+      ? "bg-emerald-400 text-stone-950 shadow-[0_10px_24px_rgba(16,185,129,0.22)]"
+      : "text-stone-400 hover:bg-white/10 hover:text-stone-100",
   );
 }
 
 function bottomClass(active: boolean) {
   return cn(
-    "motion-link flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-1 text-[0.7rem] font-semibold",
+    "motion-link flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-[1rem] px-1 text-[0.68rem] font-semibold transition-all",
     active
-      ? "bg-stone-950 text-white shadow-sm"
-      : "text-stone-500 active:bg-stone-100",
+      ? "bg-white/10 text-emerald-200 ring-1 ring-white/10 shadow-[0_10px_24px_rgba(16,185,129,0.12)]"
+      : "text-stone-400 active:bg-white/8",
   );
 }
 
@@ -426,6 +452,19 @@ function useLanguagePreference() {
 
 function readLanguagePreference() {
   return normalizeLanguage(localArahDanaStorage.readSettings()?.language);
+}
+
+function isNearPageTop() {
+  return window.scrollY < 48;
+}
+
+function isAtPageBottom() {
+  const viewportBottom = window.scrollY + window.innerHeight;
+  const documentHeight = Math.max(
+    document.documentElement.scrollHeight,
+    document.body.scrollHeight,
+  );
+  return documentHeight - viewportBottom < 32;
 }
 
 function NavGlyph({ icon }: { icon: IconName }) {

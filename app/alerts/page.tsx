@@ -27,6 +27,8 @@ import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 
 type AlertForm = Omit<AlertRule, "id" | "createdAt">;
 type AlertMode = "auto" | "manual";
+const smartCheckAutoRunKey = "arahdana.alerts.lastAutoSmartCheckAt";
+const smartCheckAutoIntervalMs = 30 * 60 * 1000;
 
 const ALERT_TYPE_LABELS: Record<AlertType, string> = {
   price_below: "Price Below Target",
@@ -141,6 +143,42 @@ export default function AlertsPage() {
   }, [isAuthLoading, user]);
 
   useEffect(() => {
+    if (!isHydrated) return;
+
+    function handlePortfolioPricesUpdated() {
+      const latestPortfolio = localArahDanaStorage.readPortfolio() ?? [];
+      const latestSettings = normalizeAlertSettings(localArahDanaStorage.readSettings());
+      setPortfolio(latestPortfolio);
+      setSettings(latestSettings);
+      setSmartAlerts(
+        generateSmartAlerts({
+          portfolio: latestPortfolio,
+          watchlist,
+          analysisResults,
+          goals,
+          goalContributions,
+          settings: latestSettings,
+        }),
+      );
+    }
+
+    window.addEventListener("arahdana:portfolio-prices-updated", handlePortfolioPricesUpdated);
+    return () => {
+      window.removeEventListener("arahdana:portfolio-prices-updated", handlePortfolioPricesUpdated);
+    };
+  }, [analysisResults, goals, goalContributions, isHydrated, watchlist]);
+
+  useEffect(() => {
+    if (!isHydrated || alertMode !== "auto" || isChecking) return;
+    const lastRun = Number(window.localStorage.getItem(smartCheckAutoRunKey) ?? 0);
+    if (Number.isFinite(lastRun) && Date.now() - lastRun < smartCheckAutoIntervalMs) return;
+    window.localStorage.setItem(smartCheckAutoRunKey, String(Date.now()));
+    void runSmartCheck();
+    // Auto smart check should run only when the page enters hydrated auto mode.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alertMode, isHydrated, isChecking]);
+
+  useEffect(() => {
     if (!isHydrated || hasAppliedPrefill.current) return;
     const params = new URLSearchParams(window.location.search);
     const source = params.get("source");
@@ -190,7 +228,7 @@ export default function AlertsPage() {
           `${triggeredCount} alert${triggeredCount !== 1 ? "s" : ""} triggered. Check notifications.`,
         );
       } else {
-        setCheckMessage("All alerts checked. No alerts triggered.");
+        setCheckMessage("Semua normal. Belum ada sinyal penting.");
       }
       if (failedCount > 0) {
         setCheckError(`${failedCount} alert${failedCount !== 1 ? "s" : ""} could not be checked. Existing data was left unchanged.`);
@@ -362,7 +400,7 @@ export default function AlertsPage() {
   }
 
   if (!isHydrated) {
-    return <LoadingState title="Memuat alert" message="Mengambil data lokal dan cloud." />;
+    return <LoadingState title="Memuat pantauan" message="Menyiapkan data." />;
   }
 
   const enabledCount = alertRules.filter((r) => r.enabled).length;
@@ -371,37 +409,37 @@ export default function AlertsPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.8rem] p-5 text-white sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-4xl font-semibold tracking-tight sm:text-5xl">Alerts</h2>
+            <h2 className="text-4xl font-semibold tracking-tight sm:text-5xl">Pantauan</h2>
             <p className="mt-2 text-sm text-white/60">
-              Set up decision-support signals for your portfolio and watchlist.
+              Sinyal otomatis untuk membantu membaca risiko portofolio.
             </p>
           </div>
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <HeaderMetric
-            label={alertMode === "auto" ? "Smart signals" : "Total rules"}
+            label={alertMode === "auto" ? "Sinyal pintar" : "Aturan"}
             value={alertMode === "auto" ? String(smartAlerts.length) : String(alertRules.length)}
-            helper={alertMode === "auto" ? "System generated" : "All rules"}
+            helper={alertMode === "auto" ? "Dipantau otomatis" : "Mode lanjut"}
           />
           <HeaderMetric
-            label={alertMode === "auto" ? "High urgency" : "Active"}
+            label={alertMode === "auto" ? "Prioritas tinggi" : "Aktif"}
             value={alertMode === "auto" ? String(highSmartCount) : String(enabledCount)}
             helper={
               alertMode === "auto"
-                ? "Sent to notifications"
+                ? "Masuk notifikasi"
                 : enabledCount === alertRules.length
-                  ? "All active"
-                  : "Some inactive"
+                  ? "Semua aktif"
+                  : "Sebagian nonaktif"
             }
           />
           <HeaderMetric
-            label="Last checked"
-            value={lastCheckTime ? new Date(lastCheckTime).toLocaleTimeString() : "Never"}
-            helper={lastCheckTime ? new Date(lastCheckTime).toLocaleDateString() : "No checks yet"}
+            label="Pembaruan"
+            value={lastCheckTime ? new Date(lastCheckTime).toLocaleTimeString() : "Belum ada"}
+            helper={lastCheckTime ? new Date(lastCheckTime).toLocaleDateString() : "Dipantau otomatis"}
           />
         </div>
 
@@ -415,7 +453,7 @@ export default function AlertsPage() {
                 : "text-white/72 hover:bg-white/10"
             }`}
           >
-            Auto Mode recommended
+            Otomatis
           </button>
           <button
             type="button"
@@ -426,7 +464,7 @@ export default function AlertsPage() {
                 : "text-white/72 hover:bg-white/10"
             }`}
           >
-            Manual Mode advanced
+            Opsi lanjut
           </button>
         </div>
 
@@ -438,7 +476,7 @@ export default function AlertsPage() {
               disabled={isChecking}
               className="min-h-12 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isChecking ? "Checking..." : "Run Smart Check"}
+              {isChecking ? "Mengecek..." : "Cek sinyal sekarang"}
             </button>
           ) : (
             <>
@@ -451,7 +489,7 @@ export default function AlertsPage() {
                 }}
                 className="min-h-12 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300"
               >
-                {isFormOpen && !editingId ? "Close" : "New Alert"}
+                {isFormOpen && !editingId ? "Tutup" : "Pantauan baru"}
               </button>
               <button
                 type="button"
@@ -459,7 +497,7 @@ export default function AlertsPage() {
                 disabled={isChecking || alertRules.length === 0}
                 className="min-h-12 rounded-[1rem] bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/12 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isChecking ? "Checking..." : "Check Alerts Now"}
+                {isChecking ? "Mengecek..." : "Cek sekarang"}
               </button>
             </>
           )}
@@ -513,24 +551,24 @@ export default function AlertsPage() {
 
           <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3 mb-4">
-              <h3 className="text-lg font-semibold text-stone-950">Manual Alert Rules</h3>
+              <h3 className="text-lg font-semibold text-stone-950">Opsi lanjut</h3>
               <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
-                {alertRules.length} rule{alertRules.length !== 1 ? "s" : ""}
+                {alertRules.length} aturan
               </span>
             </div>
 
             {alertRules.length === 0 ? (
               <div className="rounded-[1.2rem] border border-dashed border-stone-300 p-6 text-center">
-                <h4 className="font-semibold text-stone-950">No manual alerts yet</h4>
+                <h4 className="font-semibold text-stone-950">Belum ada pantauan manual</h4>
                 <p className="mt-1 text-sm text-stone-600">
-                  Auto Mode covers common signals. Create a manual rule only when you need a specific condition.
+                  Mode otomatis sudah cukup untuk sebagian besar kebutuhan. Buat aturan manual hanya bila perlu kondisi khusus.
                 </p>
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(true)}
                   className="mt-4 rounded-[1rem] bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm"
                 >
-                  Create Alert
+                  Buat pantauan
                 </button>
               </div>
             ) : (
@@ -683,28 +721,28 @@ function AlertForm({
   return (
     <form onSubmit={onSubmit} className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
       <h3 className="text-lg font-semibold text-stone-950 mb-4">
-        {isEditing ? "Edit Alert" : "Create Alert Rule"}
+        {isEditing ? "Edit pantauan" : "Buat pantauan"}
       </h3>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm font-semibold text-stone-900">Alert Name *</label>
+          <label className="text-sm font-semibold text-stone-900">Nama pantauan *</label>
           <input
             className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
             value={form.name}
             onChange={(e) => onChange({ ...form, name: e.target.value })}
-            placeholder="e.g., BBCA Buy Zone Alert"
+            placeholder="Contoh: BBCA masuk zona beli"
           />
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-stone-900">Alert Type *</label>
+          <label className="text-sm font-semibold text-stone-900">Jenis pantauan *</label>
           <select
             className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
             value={form.alertType}
             onChange={(e) => onChange({ ...form, alertType: e.target.value as AlertType })}
           >
-            <option value="">Select type</option>
+            <option value="">Pilih jenis</option>
             {Object.entries(ALERT_TYPE_LABELS).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
@@ -724,7 +762,7 @@ function AlertForm({
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-stone-900">Instrument Name</label>
+          <label className="text-sm font-semibold text-stone-900">Nama instrumen</label>
           <input
             className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
             value={form.instrumentName}
@@ -734,7 +772,7 @@ function AlertForm({
         </div>
 
         <div className="md:col-span-2">
-          <label className="text-sm font-semibold text-stone-900">Link to saved item</label>
+          <label className="text-sm font-semibold text-stone-900">Hubungkan ke data tersimpan</label>
           <select
             className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
             value={`${form.sourceType}:${form.sourceId ?? ""}`}
@@ -765,14 +803,14 @@ function AlertForm({
               onChange({ ...form, sourceType: "manual", sourceId: undefined });
             }}
           >
-            <option value="manual:">Manual rule</option>
-            {watchlist.length > 0 ? <option disabled>Watchlist</option> : null}
+            <option value="manual:">Manual</option>
+            {watchlist.length > 0 ? <option disabled>Pantauan</option> : null}
             {watchlist.map((item) => (
               <option key={item.id} value={`watchlist:${item.id}`}>
                 {item.name}
               </option>
             ))}
-            {portfolio.length > 0 ? <option disabled>Portfolio</option> : null}
+            {portfolio.length > 0 ? <option disabled>Portofolio</option> : null}
             {portfolio.map((item) => (
               <option key={item.id} value={`portfolio:${item.id}`}>
                 {item.name}
@@ -780,14 +818,14 @@ function AlertForm({
             ))}
           </select>
           <p className="mt-1 text-xs leading-5 text-stone-500">
-            Alerts are decision-support signals. They do not guarantee outcomes.
+            Pantauan membantu review keputusan, bukan jaminan hasil.
           </p>
         </div>
 
         {/* Conditional fields based on alert type */}
         {(form.alertType === "price_below" || form.alertType === "price_above") && (
           <div>
-            <label className="text-sm font-semibold text-stone-900">Target Price</label>
+            <label className="text-sm font-semibold text-stone-900">Harga target</label>
             <input
               type="number"
               min="0"
@@ -802,7 +840,7 @@ function AlertForm({
         {form.alertType === "near_buy_zone" && (
           <>
             <div>
-              <label className="text-sm font-semibold text-stone-900">Buy Zone From</label>
+              <label className="text-sm font-semibold text-stone-900">Zona beli dari</label>
               <input
                 type="number"
                 min="0"
@@ -813,7 +851,7 @@ function AlertForm({
               />
             </div>
             <div>
-              <label className="text-sm font-semibold text-stone-900">Buy Zone To</label>
+              <label className="text-sm font-semibold text-stone-900">Zona beli sampai</label>
               <input
                 type="number"
                 min="0"
@@ -828,7 +866,7 @@ function AlertForm({
 
         {form.alertType === "high_volatility" && (
           <div>
-            <label className="text-sm font-semibold text-stone-900">Volatility Threshold (%)</label>
+            <label className="text-sm font-semibold text-stone-900">Batas volatilitas (%)</label>
             <input
               type="number"
               min="0"
@@ -842,7 +880,7 @@ function AlertForm({
 
         {form.alertType === "risk_score_worsens" && (
           <div>
-            <label className="text-sm font-semibold text-stone-900">Risk Threshold (0-100)</label>
+            <label className="text-sm font-semibold text-stone-900">Batas risiko (0-100)</label>
             <input
               type="number"
               min="0"
@@ -857,7 +895,7 @@ function AlertForm({
 
         {form.alertType === "portfolio_loss" && (
           <div>
-            <label className="text-sm font-semibold text-stone-900">Loss Threshold (%)</label>
+            <label className="text-sm font-semibold text-stone-900">Batas rugi (%)</label>
             <input
               type="number"
               min="0"
@@ -871,7 +909,7 @@ function AlertForm({
 
         {form.alertType === "concentration_risk" && (
           <div>
-            <label className="text-sm font-semibold text-stone-900">Allocation Threshold (%)</label>
+            <label className="text-sm font-semibold text-stone-900">Batas alokasi (%)</label>
             <input
               type="number"
               min="0"
@@ -885,12 +923,12 @@ function AlertForm({
         )}
 
         <div className="md:col-span-2">
-          <label className="text-sm font-semibold text-stone-900">Notes</label>
+          <label className="text-sm font-semibold text-stone-900">Catatan</label>
           <textarea
             className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
             value={form.notes}
             onChange={(e) => onChange({ ...form, notes: e.target.value })}
-            placeholder="Additional notes about this alert"
+            placeholder="Catatan tambahan"
             rows={3}
           />
         </div>
@@ -904,7 +942,7 @@ function AlertForm({
             className="rounded"
           />
           <label htmlFor="enabled" className="text-sm font-semibold text-stone-900">
-            Enable this alert
+            Aktifkan pantauan ini
           </label>
         </div>
       </div>
@@ -912,16 +950,16 @@ function AlertForm({
       <div className="mt-6 flex flex-wrap gap-3">
         <button
           type="submit"
-          className="rounded-[1rem] bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
+          className="min-h-11 rounded-[1rem] bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
         >
-          {isEditing ? "Update Alert" : "Create Alert"}
+          {isEditing ? "Simpan" : "Buat pantauan"}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-[1rem] border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
+          className="min-h-11 rounded-[1rem] border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
         >
-          Cancel
+          Batal
         </button>
       </div>
     </form>
@@ -961,13 +999,13 @@ function AlertRuleCard({
             </span>
             {rule.lastTriggeredAt ? (
               <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-100">
-                Triggered {new Date(rule.lastTriggeredAt).toLocaleString()}
+                Perlu perhatian {new Date(rule.lastTriggeredAt).toLocaleString()}
               </span>
             ) : null}
           </div>
           {rule.lastCheckedAt && (
             <p className="mt-2 text-xs text-stone-500">
-              Last checked: {new Date(rule.lastCheckedAt).toLocaleString()}
+              Diperbarui: {new Date(rule.lastCheckedAt).toLocaleString()}
             </p>
           )}
           {rule.lastCheckMessage ? (
@@ -985,7 +1023,7 @@ function AlertRuleCard({
                 : "bg-stone-200 text-stone-700"
             }`}
           >
-            {rule.enabled ? "Active" : "Inactive"}
+            {rule.enabled ? "Aktif" : "Nonaktif"}
           </button>
           <button
             type="button"
@@ -999,7 +1037,7 @@ function AlertRuleCard({
             onClick={onDelete}
             className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
           >
-            Delete
+            Hapus
           </button>
         </div>
       </div>
@@ -1008,10 +1046,10 @@ function AlertRuleCard({
 }
 
 function alertStatusLabel(rule: AlertRule) {
-  if (!rule.lastCheckedAt) return "Not checked";
-  if (rule.lastCheckStatus === "triggered") return "Triggered";
-  if (rule.lastCheckStatus === "error") return "Needs attention";
-  return "Clear";
+  if (!rule.lastCheckedAt) return "Belum dicek";
+  if (rule.lastCheckStatus === "triggered") return "Perlu perhatian";
+  if (rule.lastCheckStatus === "error") return "Dipantau";
+  return "Stabil";
 }
 
 function alertStatusClass(status: AlertRule["lastCheckStatus"]) {

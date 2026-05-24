@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { BrandMark } from "@/components/BrandMark";
 import { dispatchToast } from "@/components/ToastViewport";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -120,14 +120,12 @@ export default function BetaPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#eef5f2] text-stone-950">
+    <main className="public-art-background text-stone-950">
       <section className="mx-auto grid min-h-screen max-w-6xl gap-8 px-5 py-5 sm:px-6 lg:grid-cols-[0.88fr_1.12fr] lg:px-8">
         <div className="flex flex-col">
           <header className="flex items-center justify-between gap-3">
             <Link href="/" className="flex items-center gap-3" aria-label="ArahDana">
-              <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-[1rem] bg-white shadow-sm ring-1 ring-emerald-100">
-                <Image src="/icons/arahdana-logo.png" alt="" width={44} height={44} />
-              </span>
+              <BrandMark variant="icon" tone="light" className="h-11 w-11 shadow-sm ring-emerald-100" />
               <span className="text-lg font-semibold tracking-tight">ArahDana</span>
             </Link>
             <Link
@@ -151,13 +149,13 @@ export default function BetaPage() {
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <BetaPoint title="Private by default" text="Data lokal tetap bisa dipakai tanpa login." />
-              <BetaPoint title="Cloud optional" text="Supabase sync tersedia saat konfigurasi aktif." />
-              <BetaPoint title="No hype" text="Tidak ada bahasa profit guaranteed." />
+              <BetaPoint title="Akun opsional" text="Data tetap bisa dipakai aman di perangkat ini." />
+              <BetaPoint title="Tanpa hype" text="Tidak ada bahasa janji profit." />
               <BetaPoint title="Feedback loop" text="Masukan beta dipakai untuk prioritas fitur." />
             </div>
 
             <p className="mt-6 text-xs font-medium text-stone-500">
-              Local fallback aktif. {localCount} signup tersimpan lokal di browser ini.
+              Mode perangkat aktif. {localCount} signup tersimpan di browser ini.
             </p>
           </div>
         </div>
@@ -177,7 +175,7 @@ export default function BetaPage() {
                 </p>
               </div>
               <span className="w-fit rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
-                {isSupabaseConfigured() ? "Cloud ready" : "Local fallback"}
+                {isSupabaseConfigured() ? "Data aman" : "Mode perangkat"}
               </span>
             </div>
 

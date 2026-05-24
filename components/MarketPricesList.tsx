@@ -8,6 +8,7 @@ import type {
 } from "@/lib/types/investment";
 import { fetchPublicMarketData } from "@/lib/providers/marketClient";
 import { formatPercent } from "@/lib/utils/format";
+import { PrivateValue } from "@/components/PrivateValue";
 import { analyzeInvestment } from "@/lib/analysis/analyzeInvestment";
 import {
   createSyntheticPrices,
@@ -32,8 +33,13 @@ type MarketPrice = {
   error?: string;
 };
 
-export function MarketPricesList() {
-  const [activeCategory, setActiveCategory] = useState<MarketCategory>("idx_stock");
+export function MarketPricesList({
+  initialCategory = "idx_stock",
+}: {
+  initialCategory?: MarketCategory;
+}) {
+  const [activeCategory, setActiveCategory] =
+    useState<MarketCategory>(initialCategory);
   const [range, setRange] = useState<"1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "5y" | "max">("1y");
   const [markets, setMarkets] = useState<Record<MarketCategory, MarketPrice[]>>(
     () => buildInitialMarkets(),
@@ -118,13 +124,16 @@ export function MarketPricesList() {
               key={category.key}
               type="button"
               onClick={() => setActiveCategory(category.key)}
-              className={`min-w-fit rounded-full px-4 py-2 text-xs font-semibold ring-1 ${
+              className={`inline-flex h-11 min-w-[4.35rem] shrink-0 items-center justify-center rounded-full px-3 text-center text-[0.72rem] font-semibold leading-none ring-1 sm:min-w-fit sm:px-4 sm:text-xs ${
                 activeCategory === category.key
                   ? "bg-stone-950 text-white ring-stone-950"
                   : "bg-white/60 text-stone-600 ring-stone-200 hover:bg-stone-100"
               }`}
             >
-              {category.label}
+              <span className="sm:hidden">
+                {shortMarketCategoryLabel(category.key)}
+              </span>
+              <span className="hidden sm:inline">{category.label}</span>
             </button>
           ))}
         </div>
@@ -141,6 +150,18 @@ export function MarketPricesList() {
       </div>
     </div>
   );
+}
+
+function shortMarketCategoryLabel(category: MarketCategory) {
+  if (category === "idx_stock") return "IDX";
+  if (category === "global_stock") return "Global";
+  if (category === "index_etf") return "Indeks";
+  if (category === "equity_fund") return "RD Saham";
+  if (category === "money_market_fund") return "RDPU";
+  if (category === "mixed_fund") return "Campur";
+  if (category === "bond_fund") return "RDPT";
+  if (category === "sbn_retail") return "SBN";
+  return "FR";
 }
 
 function MarketCard({ market }: { market: MarketPrice }) {
@@ -180,10 +201,12 @@ function MarketCard({ market }: { market: MarketPrice }) {
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-2xl font-bold text-stone-950">
-                  {market.currentPrice.toLocaleString("id-ID", {
-                    minimumFractionDigits: market.currentPrice < 100 ? 2 : 0,
-                    maximumFractionDigits: market.currentPrice < 100 ? 2 : 0,
-                  })}
+                  <PrivateValue>
+                    {market.currentPrice.toLocaleString("id-ID", {
+                      minimumFractionDigits: market.currentPrice < 100 ? 2 : 0,
+                      maximumFractionDigits: market.currentPrice < 100 ? 2 : 0,
+                    })}
+                  </PrivateValue>
                 </p>
                 <p
                   className={`mt-1 text-sm font-semibold ${
@@ -191,9 +214,11 @@ function MarketCard({ market }: { market: MarketPrice }) {
                   }`}
                 >
                   {market.priceChange >= 0 ? "+" : ""}
-                  {market.priceChange.toLocaleString("id-ID", {
-                    maximumFractionDigits: 2,
-                  })}{" "}
+                  <PrivateValue>
+                    {market.priceChange.toLocaleString("id-ID", {
+                      maximumFractionDigits: 2,
+                    })}
+                  </PrivateValue>{" "}
                   ({formatPercent(market.priceChangePercent)})
                 </p>
               </div>

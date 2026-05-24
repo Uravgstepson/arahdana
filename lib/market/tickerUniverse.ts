@@ -7,7 +7,9 @@ export type MarketCategory =
   | "equity_fund"
   | "money_market_fund"
   | "mixed_fund"
-  | "bond_fund";
+  | "bond_fund"
+  | "sbn_retail"
+  | "fr_bond";
 
 export type MarketInstrument = {
   ticker: string;
@@ -61,6 +63,16 @@ export const marketCategories: Array<{
     label: "Reksadana Pendapatan Tetap",
     description: "Contoh produk pendapatan tetap/obligasi.",
   },
+  {
+    key: "sbn_retail",
+    label: "SBN Retail",
+    description: "Contoh seri SBN retail untuk memantau kupon dan stabilitas instrumen negara.",
+  },
+  {
+    key: "fr_bond",
+    label: "Obligasi FR",
+    description: "Contoh obligasi fixed rate pemerintah Indonesia untuk membaca arah yield.",
+  },
 ];
 
 export const marketUniverse: MarketInstrument[] = [
@@ -113,6 +125,14 @@ export const marketUniverse: MarketInstrument[] = [
 
   { ticker: "MANDIRI-OBLIGASI.NAV", name: "Mandiri Investa Dana Obligasi", type: "bond_fund", category: "bond_fund", live: false, seedPrice: 1540, drift: 0.09, volatility: 0.8 },
   { ticker: "BNP-PENDAPATAN-TETAP.NAV", name: "BNP Paribas Prima II", type: "bond_fund", category: "bond_fund", live: false, seedPrice: 1875, drift: 0.08, volatility: 0.75 },
+
+  { ticker: "ORI025.ID", name: "ORI025", type: "bond", category: "sbn_retail", live: false, seedPrice: 100, drift: 0.015, volatility: 0.18 },
+  { ticker: "SBR013.ID", name: "SBR013", type: "bond", category: "sbn_retail", live: false, seedPrice: 100, drift: 0.012, volatility: 0.12 },
+  { ticker: "SR020.ID", name: "Sukuk Retail SR020", type: "bond", category: "sbn_retail", live: false, seedPrice: 100, drift: 0.013, volatility: 0.14 },
+
+  { ticker: "FR0100.ID", name: "FR0100", type: "bond", category: "fr_bond", live: false, seedPrice: 101.2, drift: 0.01, volatility: 0.42 },
+  { ticker: "FR0097.ID", name: "FR0097", type: "bond", category: "fr_bond", live: false, seedPrice: 99.6, drift: 0.012, volatility: 0.48 },
+  { ticker: "FR0098.ID", name: "FR0098", type: "bond", category: "fr_bond", live: false, seedPrice: 98.8, drift: 0.011, volatility: 0.45 },
 ];
 
 export function normalizeMarketTicker(input: string) {

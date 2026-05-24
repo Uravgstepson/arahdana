@@ -2,7 +2,10 @@
 
 import type { User } from "@supabase/supabase-js";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
-import { localArahDanaStorage } from "@/lib/storage/localStorage";
+import {
+  localArahDanaStorage,
+  setArahDanaStorageWriteEventsPaused,
+} from "@/lib/storage/localStorage";
 import type {
   AlertRule,
   FinancialGoal,
@@ -132,6 +135,17 @@ type ReportRow = {
   period_end: string;
   generated_at: string;
   report: PortfolioReviewReport;
+};
+
+export type UserDataSnapshot = {
+  portfolio: PortfolioItem[];
+  watchlist: WatchlistItem[];
+  settings: UserSettings;
+  analysisResults: SavedAnalysisResult[];
+  goals: FinancialGoal[];
+  goalContributions: GoalContribution[];
+  alertRules: AlertRule[];
+  reports: PortfolioReviewReport[];
 };
 
 export async function loadCloudPortfolio(user: User) {
@@ -474,25 +488,85 @@ export async function saveCloudReports(user: User, items: PortfolioReviewReport[
   return { count: rows.length };
 }
 
-export async function syncLocalDataToCloud(user: User) {
-  const portfolio = localArahDanaStorage.readPortfolio() ?? [];
-  const watchlist = localArahDanaStorage.readWatchlist() ?? [];
-  const settings = normalizeSettings(localArahDanaStorage.readSettings());
-  const analysisResults = localArahDanaStorage.readAnalysisResults() ?? [];
-  const goals = localArahDanaStorage.readGoals() ?? [];
-  const goalContributions = localArahDanaStorage.readGoalContributions() ?? [];
-  const alertRules = localArahDanaStorage.readAlertRules() ?? [];
-  const reports = localArahDanaStorage.readReports() ?? [];
+export async function loadCloudUserData(user: User): Promise<UserDataSnapshot> {
+  const [
+    portfolio,
+    watchlist,
+    settings,
+    analysisResults,
+    goals,
+    goalContributions,
+    alertRules,
+    reports,
+  ] = await Promise.all([
+    loadCloudPortfolio(user),
+    loadCloudWatchlist(user),
+    loadCloudSettings(user),
+    loadCloudAnalysisResults(user),
+    loadCloudGoals(user),
+    loadCloudGoalContributions(user),
+    loadCloudAlertRules(user),
+    loadCloudReports(user),
+  ]);
 
+  return {
+    portfolio,
+    watchlist,
+    settings: settings ?? DEFAULT_USER_SETTINGS,
+    analysisResults,
+    goals,
+    goalContributions,
+    alertRules,
+    reports,
+  };
+}
+
+export function readLocalUserDataSnapshot(): UserDataSnapshot {
+  return {
+    portfolio: localArahDanaStorage.readPortfolio() ?? [],
+    watchlist: localArahDanaStorage.readWatchlist() ?? [],
+    settings: normalizeSettings(localArahDanaStorage.readSettings()),
+    analysisResults: localArahDanaStorage.readAnalysisResults() ?? [],
+    goals: localArahDanaStorage.readGoals() ?? [],
+    goalContributions: localArahDanaStorage.readGoalContributions() ?? [],
+    alertRules: localArahDanaStorage.readAlertRules() ?? [],
+    reports: localArahDanaStorage.readReports() ?? [],
+  };
+}
+
+export function writeUserDataSnapshotToLocal(snapshot: UserDataSnapshot) {
+  setArahDanaStorageWriteEventsPaused(true);
+  try {
+    localArahDanaStorage.writePortfolio(snapshot.portfolio);
+    localArahDanaStorage.writeWatchlist(snapshot.watchlist);
+    localArahDanaStorage.writeSettings(snapshot.settings);
+    localArahDanaStorage.writeAnalysisResults(snapshot.analysisResults);
+    localArahDanaStorage.writeGoals(snapshot.goals);
+    localArahDanaStorage.writeGoalContributions(snapshot.goalContributions);
+    localArahDanaStorage.writeAlertRules(snapshot.alertRules);
+    localArahDanaStorage.writeReports(snapshot.reports);
+  } finally {
+    setArahDanaStorageWriteEventsPaused(false);
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("arahdana:user-data-ready"));
+    window.dispatchEvent(new Event("arahdana:settings-updated"));
+    window.dispatchEvent(new Event("arahdana:notifications-updated"));
+    window.dispatchEvent(new Event("arahdana:portfolio-prices-updated"));
+  }
+}
+
+export async function syncUserDataSnapshotToCloud(user: User, snapshot: UserDataSnapshot) {
   const results = await Promise.allSettled([
-    saveCloudPortfolio(user, portfolio),
-    saveCloudWatchlist(user, watchlist),
-    saveCloudSettings(user, settings).then(() => ({ count: 1 })),
-    saveCloudAnalysisResults(user, analysisResults),
-    saveCloudGoals(user, goals),
-    saveCloudGoalContributions(user, goalContributions),
-    saveCloudAlertRules(user, alertRules),
-    saveCloudReports(user, reports),
+    saveCloudPortfolio(user, snapshot.portfolio),
+    saveCloudWatchlist(user, snapshot.watchlist),
+    saveCloudSettings(user, snapshot.settings).then(() => ({ count: 1 })),
+    saveCloudAnalysisResults(user, snapshot.analysisResults),
+    saveCloudGoals(user, snapshot.goals),
+    saveCloudGoalContributions(user, snapshot.goalContributions),
+    saveCloudAlertRules(user, snapshot.alertRules),
+    saveCloudReports(user, snapshot.reports),
   ]);
 
   const failures = results
@@ -517,6 +591,22 @@ export async function syncLocalDataToCloud(user: User) {
     alertRuleCount: results[6].status === "fulfilled" ? results[6].value.count : 0,
     reportCount: results[7].status === "fulfilled" ? results[7].value.count : 0,
   };
+}
+
+export function hasUserFinancialData(snapshot: UserDataSnapshot) {
+  return (
+    snapshot.portfolio.length > 0 ||
+    snapshot.watchlist.length > 0 ||
+    snapshot.analysisResults.length > 0 ||
+    snapshot.goals.length > 0 ||
+    snapshot.goalContributions.length > 0 ||
+    snapshot.alertRules.length > 0 ||
+    snapshot.reports.length > 0
+  );
+}
+
+export async function syncLocalDataToCloud(user: User) {
+  return syncUserDataSnapshotToCloud(user, readLocalUserDataSnapshot());
 }
 
 const syncStepLabels = [

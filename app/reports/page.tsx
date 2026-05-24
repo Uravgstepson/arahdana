@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { LoadingState } from "@/components/AppState";
 import { useAuth } from "@/components/AuthProvider";
+import { PrivateValue } from "@/components/PrivateValue";
 import { dispatchToast } from "@/components/ToastViewport";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import {
@@ -68,7 +69,7 @@ export default function ReportsPage() {
           setData(localData);
           setReports(sortReports(localReports));
           setSelectedReportId(localReports[0]?.id ?? null);
-          setSyncMessage("Local mode. Login untuk sync laporan antar perangkat.");
+          setSyncMessage("Laporan aman di perangkat ini.");
           setIsHydrated(true);
           return;
         }
@@ -83,8 +84,8 @@ export default function ReportsPage() {
           localArahDanaStorage.writeReports(nextReports);
           setSyncMessage(
             cloudReports.length > 0
-              ? "Cloud sync enabled. Laporan dimuat dari Supabase dan dicadangkan lokal."
-              : "Cloud sync enabled. Belum ada laporan cloud; laporan baru akan dicadangkan.",
+              ? "Laporan siap dan terjaga."
+              : "Laporan siap. Laporan baru akan dijaga otomatis.",
           );
         } catch (error) {
           if (!isMounted) return;
@@ -93,8 +94,8 @@ export default function ReportsPage() {
           setSelectedReportId(localReports[0]?.id ?? null);
           setSyncMessage(
             error instanceof Error
-              ? `Cloud sync gagal, memakai localStorage. ${error.message}`
-              : "Cloud sync gagal, memakai localStorage.",
+              ? `Laporan tetap aman di perangkat ini. ${error.message}`
+              : "Laporan tetap aman di perangkat ini.",
           );
         } finally {
           if (isMounted) setIsHydrated(true);
@@ -114,8 +115,8 @@ export default function ReportsPage() {
     void saveCloudReports(user, reports).catch((error) => {
       setSyncMessage(
         error instanceof Error
-          ? `Local backup tersimpan, cloud sync laporan gagal. ${error.message}`
-          : "Local backup tersimpan, cloud sync laporan gagal.",
+          ? `Laporan tersimpan di perangkat ini. ${error.message}`
+          : "Laporan tersimpan di perangkat ini.",
       );
     });
   }, [isHydrated, reports, user]);
@@ -234,7 +235,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.8rem] p-5 text-white sm:p-6">
         <p className="text-sm font-medium text-white/60">Portfolio Review Reports</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">
           Review berkala yang tenang
@@ -246,7 +247,7 @@ export default function ReportsPage() {
           <HeroMetric label="Reports" value={String(reports.length)} />
           <HeroMetric label="Holdings" value={String(data.portfolio.length)} />
           <HeroMetric label="Goals" value={String(data.goals.length)} />
-          <HeroMetric label="Mode" value={user ? "Cloud" : "Local"} />
+          <HeroMetric label="Status" value={user ? "Data aman" : "Aman"} />
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="grid grid-cols-3 rounded-[1rem] bg-white/8 p-1 ring-1 ring-white/10">
@@ -381,8 +382,8 @@ function ReportView({ report }: { report: PortfolioReviewReport }) {
           <TrendPill current={report.healthScore} previous={report.previousHealthScore} suffix="/100" />
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-4">
-          <Metric label="Portfolio" value={formatRupiah(report.portfolioValue)} helper={deltaCurrency(report.portfolioValue, report.previousPortfolioValue)} />
-          <Metric label="Gain/Loss" value={formatRupiah(report.gainLoss)} helper={formatPercent(report.gainLossPercent)} tone={report.gainLoss >= 0 ? "good" : "bad"} />
+          <Metric label="Portfolio" value={<PrivateValue>{formatRupiah(report.portfolioValue)}</PrivateValue>} helper={<PrivateValue>{deltaCurrency(report.portfolioValue, report.previousPortfolioValue)}</PrivateValue>} />
+          <Metric label="Gain/Loss" value={<PrivateValue>{formatRupiah(report.gainLoss)}</PrivateValue>} helper={formatPercent(report.gainLossPercent)} tone={report.gainLoss >= 0 ? "good" : "bad"} />
           <Metric label="Health" value={`${report.healthScore}/100`} helper={scoreDelta(report.healthScore, report.previousHealthScore)} />
           <Metric label="Alerts" value={String(report.majorAlerts.length)} helper="Major signals" />
         </div>
@@ -428,9 +429,9 @@ function ReportView({ report }: { report: PortfolioReviewReport }) {
 
       <section className="grid gap-4 lg:grid-cols-3">
         <Panel title="DCA Summary">
-          <Metric label="Contributions" value={String(report.dcaSummary.contributionCount)} helper={formatRupiah(report.dcaSummary.totalContribution)} />
+          <Metric label="Contributions" value={String(report.dcaSummary.contributionCount)} helper={<PrivateValue>{formatRupiah(report.dcaSummary.totalContribution)}</PrivateValue>} />
           <p className="mt-3 text-sm leading-6 text-stone-600">
-            Average contribution: {formatRupiah(report.dcaSummary.averageContribution)}.
+            Average contribution: <PrivateValue>{formatRupiah(report.dcaSummary.averageContribution)}</PrivateValue>.
           </p>
         </Panel>
         <Panel title="Goal Progress">
@@ -483,8 +484,8 @@ function Metric({
   tone = "neutral",
 }: {
   label: string;
-  value: string;
-  helper?: string;
+  value: ReactNode;
+  helper?: ReactNode;
   tone?: "neutral" | "good" | "bad";
 }) {
   const toneClass =
@@ -533,7 +534,7 @@ function Performer({
         <>
           <p className="mt-2 font-semibold text-stone-950">{item.name}</p>
           <p className={`mt-1 text-sm font-semibold ${tone === "good" ? "text-emerald-700" : "text-rose-700"}`}>
-            {formatRupiah(item.gainLoss)} ({formatPercent(item.gainLossPercent)})
+            <PrivateValue>{formatRupiah(item.gainLoss)}</PrivateValue> ({formatPercent(item.gainLossPercent)})
           </p>
         </>
       ) : (
@@ -604,7 +605,7 @@ function AllocationRow({ slice }: { slice: PortfolioReviewReport["allocation"][n
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-stone-950">{slice.label}</p>
-          <p className="text-xs text-stone-500">{formatRupiah(slice.value)}</p>
+          <p className="text-xs text-stone-500"><PrivateValue>{formatRupiah(slice.value)}</PrivateValue></p>
         </div>
         <div className="text-right">
           <p className="text-sm font-semibold text-stone-950">{slice.percent.toFixed(1)}%</p>

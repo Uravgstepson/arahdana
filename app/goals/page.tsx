@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  type FormEvent,
   type ReactNode,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import Link from "next/link";
 import {
   CartesianGrid,
   Line,
@@ -18,6 +18,7 @@ import {
 import { LoadingState } from "@/components/AppState";
 import { useAuth } from "@/components/AuthProvider";
 import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
+import { PrivateValue } from "@/components/PrivateValue";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import {
   loadCloudGoalContributions,
@@ -29,14 +30,12 @@ import {
 } from "@/lib/supabase/sync";
 import type {
   FinancialGoal,
-  FinancialGoalCategory,
   GoalContribution,
   InvestmentType,
   PortfolioItem,
 } from "@/lib/types/investment";
 import {
   formatRupiah,
-  investmentTypeLabel,
   nonNegativeNumber,
 } from "@/lib/utils/format";
 import { usePerformanceMode } from "@/lib/utils/performanceMode";
@@ -47,24 +46,9 @@ import {
   planFinancialGoal,
   type GoalPlan,
 } from "@/lib/goals/goalPlanner";
-import {
-  validateNonNegativeNumber,
-  validatePositiveNumber,
-  validateRiskTolerance,
-} from "@/lib/validation";
+import { validatePositiveNumber } from "@/lib/validation";
 
-type GoalForm = Omit<FinancialGoal, "id" | "createdAt" | "updatedAt" | "riskProfile">;
 type ContributionDraft = Record<string, { amount: number; contributionMonth: string; note: string }>;
-
-const goalCategories: FinancialGoalCategory[] = [
-  "emergency_fund",
-  "education",
-  "motorcycle",
-  "car",
-  "house",
-  "retirement",
-  "custom",
-];
 
 const selectableInstrumentTypes: InvestmentType[] = [
   "cash_savings",
@@ -81,11 +65,8 @@ export default function GoalsPage() {
   const [contributions, setContributions] = useState<GoalContribution[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
-  const [form, setForm] = useState<GoalForm>(() => createEmptyGoalForm());
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [syncMessage, setSyncMessage] = useState("Memuat tujuan finansial...");
-  const [formError, setFormError] = useState("");
   const [drafts, setDrafts] = useState<ContributionDraft>({});
 
   useEffect(() => {
@@ -112,7 +93,7 @@ export default function GoalsPage() {
           setContributions(localContributions);
           setPortfolio(localPortfolio);
           setAprMoneyMarketFund(localApr);
-          setSyncMessage("Local mode. Login untuk sinkronisasi tujuan antar perangkat.");
+          setSyncMessage("Tujuan aman di perangkat ini.");
           setIsHydrated(true);
           return;
         }
@@ -141,8 +122,8 @@ export default function GoalsPage() {
           localArahDanaStorage.writePortfolio(nextPortfolio);
           setSyncMessage(
             cloudGoals.length > 0
-              ? "Cloud sync enabled. Tujuan dimuat dari Supabase dan dicadangkan lokal."
-              : "Cloud sync enabled. Belum ada tujuan cloud; data lokal akan dicadangkan saat berubah.",
+              ? "Tujuan siap dan terjaga."
+              : "Tujuan siap. Data baru akan dijaga otomatis.",
           );
         } catch (error) {
           if (!isMounted) return;
@@ -152,8 +133,8 @@ export default function GoalsPage() {
           setAprMoneyMarketFund(localApr);
           setSyncMessage(
             error instanceof Error
-              ? `Cloud sync gagal, memakai localStorage. ${error.message}`
-              : "Cloud sync gagal, memakai localStorage.",
+              ? `Tujuan tetap aman di perangkat ini. ${error.message}`
+              : "Tujuan tetap aman di perangkat ini.",
           );
         } finally {
           if (isMounted) setIsHydrated(true);
@@ -172,12 +153,12 @@ export default function GoalsPage() {
     if (!user) return;
 
     void saveCloudGoals(user, goals)
-      .then(() => setSyncMessage("Cloud sync enabled. Tujuan tersimpan di Supabase dan localStorage."))
+      .then(() => setSyncMessage("Tujuan tersimpan."))
       .catch((error) =>
         setSyncMessage(
           error instanceof Error
-            ? `Tujuan tersimpan lokal, cloud sync gagal. ${error.message}`
-            : "Tujuan tersimpan lokal, cloud sync gagal.",
+            ? `Tujuan tersimpan di perangkat ini. ${error.message}`
+            : "Tujuan tersimpan di perangkat ini.",
         ),
       );
   }, [goals, isHydrated, user]);
@@ -188,12 +169,12 @@ export default function GoalsPage() {
     if (!user) return;
 
     void saveCloudGoalContributions(user, contributions)
-      .then(() => setSyncMessage("Cloud sync enabled. Kontribusi tujuan tersimpan."))
+      .then(() => setSyncMessage("Kontribusi tersimpan."))
       .catch((error) =>
         setSyncMessage(
           error instanceof Error
-            ? `Kontribusi tersimpan lokal, cloud sync gagal. ${error.message}`
-            : "Kontribusi tersimpan lokal, cloud sync gagal.",
+            ? `Kontribusi tersimpan di perangkat ini. ${error.message}`
+            : "Kontribusi tersimpan di perangkat ini.",
         ),
       );
   }, [contributions, isHydrated, user]);
@@ -210,63 +191,9 @@ export default function GoalsPage() {
     }));
   }, [aprMoneyMarketFund, contributions, goals, portfolio]);
 
-  function submitGoal(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormError("");
-    const validation = validateGoalForm(form);
-    if (validation) {
-      setFormError(validation);
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const nextGoal: FinancialGoal = {
-      ...form,
-      id: editingId ?? crypto.randomUUID(),
-      riskTolerance: clampRisk(form.riskTolerance),
-      riskProfile: goalRiskProfile(form.riskTolerance),
-      preferredInstruments: dedupeInstruments(form.preferredInstruments),
-      linkedHoldingIds: Array.from(new Set(form.linkedHoldingIds)),
-      createdAt: editingId
-        ? goals.find((goal) => goal.id === editingId)?.createdAt ?? now
-        : now,
-      updatedAt: now,
-    };
-
-    setGoals((current) =>
-      editingId
-        ? current.map((goal) => (goal.id === editingId ? nextGoal : goal))
-        : [nextGoal, ...current],
-    );
-    setEditingId(null);
-    setForm(createEmptyGoalForm());
-  }
-
-  function startEditing(goal: FinancialGoal) {
-    setEditingId(goal.id);
-    setForm({
-      category: goal.category,
-      name: goal.name,
-      targetAmount: goal.targetAmount,
-      targetDate: goal.targetDate,
-      monthlyContribution: goal.monthlyContribution,
-      riskTolerance: goal.riskTolerance,
-      preferredInstruments: goal.preferredInstruments,
-      linkedHoldingIds: goal.linkedHoldingIds,
-    });
-    setFormError("");
-  }
-
-  function cancelEditing() {
-    setEditingId(null);
-    setForm(createEmptyGoalForm());
-    setFormError("");
-  }
-
   function deleteGoal(id: string) {
     setGoals((current) => current.filter((goal) => goal.id !== id));
     setContributions((current) => current.filter((item) => item.goalId !== id));
-    if (editingId === id) cancelEditing();
   }
 
   function addContribution(goal: FinancialGoal) {
@@ -307,7 +234,7 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.8rem] p-5 text-white sm:p-6">
         <p className="text-sm font-medium text-white/62">Smart DCA Planner</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight">
           Rencanakan tujuan dengan disiplin
@@ -318,7 +245,7 @@ export default function GoalsPage() {
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <HeroMetric label="Tujuan aktif" value={`${goals.length}`} />
           <HeroMetric label="Kontribusi tercatat" value={`${contributions.length}`} />
-          <HeroMetric label="Mode" value={user ? "Cloud" : "Local"} />
+          <HeroMetric label="Status" value={user ? "Data aman" : "Aman"} />
         </div>
       </section>
 
@@ -327,16 +254,33 @@ export default function GoalsPage() {
         <p className="mt-1 text-sm leading-6 text-stone-600">{syncMessage}</p>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
-        <GoalFormCard
-          form={form}
-          editingId={editingId}
-          portfolio={portfolio}
-          formError={formError}
-          onSubmit={submitGoal}
-          onCancel={cancelEditing}
-          onChange={setForm}
-        />
+      <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
+        <section className="h-fit rounded-[1.4rem] border border-stone-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
+            Focused flow
+          </p>
+          <h2 className="mt-2 text-lg font-semibold text-stone-950">
+            Kelola tujuan di halaman khusus
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-stone-600">
+            Pembuatan dan edit tujuan dipindahkan ke flow bertahap agar halaman
+            ini tetap menjadi ringkasan dan monitor progress.
+          </p>
+          <div className="mt-4 grid gap-2">
+            <Link
+              href="/goals/new"
+              className="inline-flex min-h-11 items-center justify-center rounded-[1rem] bg-emerald-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600"
+            >
+              Buat tujuan baru
+            </Link>
+            <Link
+              href="/goals/edit"
+              className="inline-flex min-h-11 items-center justify-center rounded-[1rem] bg-stone-950/5 px-4 text-sm font-semibold text-stone-700 ring-1 ring-stone-200 hover:bg-stone-950/10"
+            >
+              Edit tujuan
+            </Link>
+          </div>
+        </section>
 
         <section className="space-y-4">
           {goals.length === 0 ? (
@@ -361,213 +305,17 @@ export default function GoalsPage() {
               }
               onAddContribution={() => addContribution(goal)}
               onDeleteContribution={deleteContribution}
-              onEdit={() => startEditing(goal)}
+              onEdit={() => {
+                window.location.assign(
+                  `/goals/edit?id=${encodeURIComponent(goal.id)}`,
+                );
+              }}
               onDelete={() => deleteGoal(goal.id)}
             />
           ))}
         </section>
       </div>
     </div>
-  );
-}
-
-function GoalFormCard({
-  form,
-  editingId,
-  portfolio,
-  formError,
-  onSubmit,
-  onCancel,
-  onChange,
-}: {
-  form: GoalForm;
-  editingId: string | null;
-  portfolio: PortfolioItem[];
-  formError: string;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onCancel: () => void;
-  onChange: (form: GoalForm) => void;
-}) {
-  return (
-    <form
-      onSubmit={onSubmit}
-      className="rounded-[1.4rem] border border-stone-200 bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:self-start"
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-stone-950">
-            {editingId ? "Edit tujuan" : "Tujuan baru"}
-          </h2>
-          <p className="mt-1 text-sm text-stone-600">
-            Fokus pada target, kontribusi rutin, dan instrumen yang cocok.
-          </p>
-        </div>
-        <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
-          {riskLabel(goalRiskProfile(form.riskTolerance))}
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-4">
-        <Field label="Kategori">
-          <select
-            className="input"
-            value={form.category}
-            onChange={(event) =>
-              onChange({
-                ...form,
-                category: event.target.value as FinancialGoalCategory,
-                name:
-                  form.name === goalCategoryLabel(form.category)
-                    ? goalCategoryLabel(event.target.value as FinancialGoalCategory)
-                    : form.name,
-              })
-            }
-          >
-            {goalCategories.map((category) => (
-              <option key={category} value={category}>
-                {goalCategoryLabel(category)}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Nama tujuan">
-          <input
-            className="input"
-            value={form.name}
-            onChange={(event) => onChange({ ...form, name: event.target.value })}
-          />
-        </Field>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-          <Field label="Target dana">
-            <input
-              className="input"
-              type="number"
-              min="0"
-              value={form.targetAmount || ""}
-              onChange={(event) =>
-                onChange({
-                  ...form,
-                  targetAmount: nonNegativeNumber(Number(event.target.value)),
-                })
-              }
-            />
-          </Field>
-          <Field label="Target tanggal">
-            <input
-              className="input"
-              type="date"
-              value={form.targetDate}
-              onChange={(event) => onChange({ ...form, targetDate: event.target.value })}
-            />
-          </Field>
-        </div>
-
-        <Field label="Kontribusi bulanan">
-          <input
-            className="input"
-            type="number"
-            min="0"
-            value={form.monthlyContribution || ""}
-            onChange={(event) =>
-              onChange({
-                ...form,
-                monthlyContribution: nonNegativeNumber(Number(event.target.value)),
-              })
-            }
-          />
-        </Field>
-
-        <Field label={`Toleransi risiko: ${form.riskTolerance}%`}>
-          <input
-            type="range"
-            min="5"
-            max="30"
-            value={form.riskTolerance}
-            onChange={(event) =>
-              onChange({ ...form, riskTolerance: clampRisk(Number(event.target.value)) })
-            }
-          />
-        </Field>
-
-        <Field label="Instrumen pilihan">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-            {selectableInstrumentTypes.map((type) => (
-              <label
-                key={type}
-                className="flex items-center gap-3 rounded-[1rem] bg-stone-100 px-3 py-2 text-sm font-semibold text-stone-700"
-              >
-                <input
-                  type="checkbox"
-                  checked={form.preferredInstruments.includes(type)}
-                  onChange={(event) => {
-                    const preferred = event.target.checked
-                      ? [...form.preferredInstruments, type]
-                      : form.preferredInstruments.filter((item) => item !== type);
-                    onChange({ ...form, preferredInstruments: dedupeInstruments(preferred) });
-                  }}
-                />
-                {investmentTypeLabel(type)}
-              </label>
-            ))}
-          </div>
-        </Field>
-
-        <Field label="Hubungkan holding portofolio">
-          <div className="grid max-h-56 gap-2 overflow-y-auto rounded-[1rem] bg-stone-100 p-2">
-            {portfolio.length === 0 ? (
-              <p className="p-3 text-sm text-stone-500">
-                Belum ada holding. Tambahkan portofolio dulu untuk melacak progress otomatis.
-              </p>
-            ) : null}
-            {portfolio.map((item) => (
-              <label
-                key={item.id}
-                className="flex items-start gap-3 rounded-[0.9rem] bg-white px-3 py-2 text-sm"
-              >
-                <input
-                  className="mt-1"
-                  type="checkbox"
-                  checked={form.linkedHoldingIds.includes(item.id)}
-                  onChange={(event) => {
-                    const linked = event.target.checked
-                      ? [...form.linkedHoldingIds, item.id]
-                      : form.linkedHoldingIds.filter((id) => id !== item.id);
-                    onChange({ ...form, linkedHoldingIds: linked });
-                  }}
-                />
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold text-stone-950">
-                    {item.name}
-                  </span>
-                  <span className="block text-xs text-stone-500">
-                    {item.ticker || investmentTypeLabel(item.type)}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </Field>
-      </div>
-
-      <div className="mt-5 flex flex-wrap gap-3">
-        <button className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800">
-          {editingId ? "Simpan tujuan" : "Buat tujuan"}
-        </button>
-        {editingId ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
-          >
-            Batal
-          </button>
-        ) : null}
-      </div>
-
-      {formError ? <p className="mt-3 text-sm font-medium text-rose-700">{formError}</p> : null}
-    </form>
   );
 }
 
@@ -634,9 +382,9 @@ function GoalCard({
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Target" value={formatRupiah(goal.targetAmount)} />
-        <Metric label="Progress linked" value={formatRupiah(plan.currentProgress)} helper={`${plan.progressPercent}%`} />
-        <Metric label="DCA disarankan" value={formatRupiah(plan.requiredMonthlyInvestment)} helper="Estimasi base" />
+        <Metric label="Target" value={<PrivateValue>{formatRupiah(goal.targetAmount)}</PrivateValue>} />
+        <Metric label="Progress" value={<PrivateValue>{formatRupiah(plan.currentProgress)}</PrivateValue>} helper={`${plan.progressPercent}%`} />
+        <Metric label="DCA disarankan" value={<PrivateValue>{formatRupiah(plan.requiredMonthlyInvestment)}</PrivateValue>} helper="Estimasi tenang" />
         <Metric label="Streak" value={`${plan.contributionStreak} bulan`} helper="Kontribusi rutin" />
       </div>
 
@@ -674,7 +422,7 @@ function GoalCard({
           <div className="mt-4 grid gap-2 text-sm text-stone-600">
             <p>
               <span className="font-semibold text-stone-950">Range:</span>{" "}
-              {formatRupiah(plan.lowFutureValue)} - {formatRupiah(plan.highFutureValue)}
+              <PrivateValue>{formatRupiah(plan.lowFutureValue)} - {formatRupiah(plan.highFutureValue)}</PrivateValue>
             </p>
             <p>
               <span className="font-semibold text-stone-950">Estimasi selesai:</span>{" "}
@@ -761,7 +509,7 @@ function GoalCard({
               >
                 <div className="min-w-0">
                   <p className="font-semibold text-stone-950">
-                    {formatRupiah(item.amount)} | {item.contributionMonth}
+                    <PrivateValue>{formatRupiah(item.amount)}</PrivateValue> | {item.contributionMonth}
                   </p>
                   {item.note ? <p className="truncate text-xs text-stone-500">{item.note}</p> : null}
                 </div>
@@ -838,7 +586,7 @@ function ProjectionTooltip({
         {payload.map((item) => (
           <p key={item.name} className="flex items-center justify-between gap-4 text-stone-600">
             <span>{item.name}</span>
-            <span className="font-semibold text-stone-950">{formatRupiah(Number(item.value ?? 0))}</span>
+            <span className="font-semibold text-stone-950"><PrivateValue>{formatRupiah(Number(item.value ?? 0))}</PrivateValue></span>
           </p>
         ))}
       </div>
@@ -892,7 +640,7 @@ function Metric({
   helper,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   helper?: string;
 }) {
   return (
@@ -904,48 +652,12 @@ function Metric({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="grid gap-1 text-sm font-medium text-stone-700">
-      {label}
-      {children}
-    </label>
-  );
-}
-
-function createEmptyGoalForm(): GoalForm {
-  const category: FinancialGoalCategory = "emergency_fund";
-  return {
-    category,
-    name: goalCategoryLabel(category),
-    targetAmount: 10_000_000,
-    targetDate: nextYearDate(1),
-    monthlyContribution: 500_000,
-    riskTolerance: 10,
-    preferredInstruments: ["money_market_fund", "cash_savings"],
-    linkedHoldingIds: [],
-  };
-}
-
 function createContributionDraft(goal: FinancialGoal) {
   return {
     amount: goal.monthlyContribution,
     contributionMonth: new Date().toISOString().slice(0, 7),
     note: "",
   };
-}
-
-function validateGoalForm(form: GoalForm) {
-  if (!form.name.trim()) return "Nama tujuan wajib diisi.";
-  const targetError = validatePositiveNumber(form.targetAmount, "Target dana");
-  if (targetError) return targetError;
-  const contributionError = validateNonNegativeNumber(form.monthlyContribution, "Kontribusi bulanan");
-  if (contributionError) return contributionError;
-  const riskError = validateRiskTolerance(form.riskTolerance);
-  if (riskError) return riskError;
-  const targetDate = new Date(`${form.targetDate}T00:00:00`);
-  if (Number.isNaN(targetDate.getTime())) return "Target tanggal tidak valid.";
-  return "";
 }
 
 function normalizeGoals(items: FinancialGoal[]) {
@@ -986,12 +698,6 @@ function riskLabel(value: FinancialGoal["riskProfile"]) {
   if (value === "defensive") return "Defensif";
   if (value === "balanced") return "Seimbang";
   return "Agresif";
-}
-
-function nextYearDate(years: number) {
-  const date = new Date();
-  date.setFullYear(date.getFullYear() + years);
-  return date.toISOString().slice(0, 10);
 }
 
 function safeMonth(value: string) {

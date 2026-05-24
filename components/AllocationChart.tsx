@@ -5,6 +5,7 @@ import { Cell, Pie, PieChart, Tooltip } from "recharts";
 import { formatRupiah } from "@/lib/utils/format";
 import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
+import { PrivateValue } from "@/components/PrivateValue";
 
 export type AllocationDatum = {
   key: string;
@@ -67,7 +68,7 @@ export function AllocationChart({
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-stone-950">{item.percent}%</p>
-                  <p className="text-xs text-stone-500">{formatRupiah(item.value)}</p>
+                  <p className="text-xs text-stone-500"><PrivateValue>{formatRupiah(item.value)}</PrivateValue></p>
                 </div>
               </div>
             ))}
@@ -101,7 +102,7 @@ function AllocationTooltip({
   return (
     <div className="rounded-lg border border-stone-200 bg-white/95 p-3 text-sm shadow-sm">
       <p className="font-semibold text-stone-950">{item.label}</p>
-      <p className="mt-1 text-stone-600">{formatRupiah(item.value)}</p>
+      <p className="mt-1 text-stone-600"><PrivateValue>{formatRupiah(item.value)}</PrivateValue></p>
       <p className="text-xs font-semibold text-emerald-700">{item.percent}% portofolio</p>
     </div>
   );

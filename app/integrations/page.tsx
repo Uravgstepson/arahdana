@@ -5,44 +5,43 @@ import { IntegrationsCsvImport } from "@/components/IntegrationsCsvImport";
 export default function IntegrationsPage() {
   const cards = [
     {
-      title: "Data pasar dari Google Finance",
+      title: "Harga pasar",
       status: "Data publik",
       description:
-        "Route uji untuk ticker saham Indonesia seperti BBCA:IDX, BBRI:IDX, TLKM:IDX, ASII:IDX, dan benchmark IHSG ^JKSE melalui /api/market (source=auto). Metadata dicoba dari Google Finance, dan data chart akan fallback ke Yahoo jika diperlukan.",
+        "Pantau harga saham Indonesia dan benchmark pasar untuk membantu review portofolio.",
     },
     {
-      title: "Data kurs Bank Indonesia",
+      title: "Konteks makro",
       status: "Data publik",
       description:
-        "Route /api/macro/bi-rate memanggil webservice kurs Bank Indonesia getSubKursLokal3 dan menormalkan XML menjadi JSON untuk konteks makro.",
+        "Gunakan data kurs dan konteks pasar sebagai latar saat membaca risiko.",
     },
     {
-      title: "Impor Bibit dan tabungan semi-otomatis",
-      status: "CSV browser-only",
+      title: "Impor Bibit dan tabungan",
+      status: "CSV aman",
       description:
-        "CSV holdings dibaca di browser, dipratinjau, divalidasi, lalu disimpan ke Supabase saat login atau localStorage saat belum login.",
+        "File dibaca di browser, dipratinjau, lalu baru disimpan setelah kamu setujui.",
     },
     {
       title: "Login langsung bank/e-wallet/Bibit",
-      status: "Nonaktif di V1",
+      status: "Tidak digunakan",
       description:
-        "Sinkronisasi berbasis kredensial tetap nonaktif. ArahDana tidak akan meminta password bank, OTP, kredensial e-wallet, kredensial Bibit, atau kredensial broker privat.",
+        "ArahDana tidak meminta password bank, OTP, kredensial e-wallet, Bibit, atau broker privat.",
     },
   ];
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-lg border border-rose-200 bg-rose-50 p-5 text-sm leading-6 text-rose-950">
-        <h2 className="text-lg font-semibold">Peringatan keamanan</h2>
-        <p className="mt-2">
-          Integrasi bank/e-wallet nyata nonaktif di V1. Integrasi akun Bibit
-          langsung juga nonaktif di V1. Gunakan impor tempel/CSV semi-otomatis
-          agar data portofolio dan tabungan bisa ditinjau sebelum disimpan.
+    <div className="w-full max-w-full min-w-0 space-y-5 overflow-x-hidden">
+      <section className="w-full max-w-full min-w-0 rounded-lg border border-rose-200 bg-rose-50 p-5 text-sm leading-6 text-rose-950">
+        <h2 className="text-lg font-semibold">Keamanan data</h2>
+        <p className="mt-2 break-words">
+          ArahDana tidak meminta kredensial finansial privat. Gunakan CSV untuk
+          meninjau data terlebih dahulu sebelum disimpan.
         </p>
       </section>
       <IntegrationsCsvImport />
       <ApiTestPanel />
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid w-full max-w-full min-w-0 gap-4 md:grid-cols-2">
         {cards.map((card) => (
           <IntegrationCard key={card.title} {...card} />
         ))}

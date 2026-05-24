@@ -1,11 +1,13 @@
-const CACHE_VERSION = "arahdana-pwa-v2";
+const CACHE_VERSION = "arahdana-pwa-v3";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const OFFLINE_URL = "/offline.html";
 const PRECACHE_URLS = [
   OFFLINE_URL,
   "/",
-  "/dashboard",
+  "/login",
+  "/register",
   "/manifest.json",
+  "/icons/Logo_full_brand-removebg-preview.png",
   "/icons/arahdana-logo.png",
   "/icons/arahdana-icon-192.png",
   "/icons/arahdana-icon-512.png",

@@ -30,17 +30,17 @@ const sections = [
 export default function OnboardingPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-6 text-white shadow-sm">
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.8rem] p-6 text-white">
         <p className="text-sm font-medium text-white/62">ArahDana v1.0 Beta</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight">Mulai dengan batasan yang jelas</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
           ArahDana dibuat sebagai alat bantu pencatatan dan analisis awal. Gunakan untuk membuat keputusan lebih terstruktur, bukan untuk menyerahkan keputusan investasi.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Link href="/portfolio" className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-stone-950">
+          <Link href="/porto/add" className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-stone-950">
             Buka portofolio
           </Link>
-          <Link href="/analyzer" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">
+          <Link href="/analysis/new" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">
             Coba analyzer
           </Link>
         </div>

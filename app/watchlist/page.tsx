@@ -48,13 +48,14 @@ export default function WatchlistPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [analysisById, setAnalysisById] = useState<WatchlistAnalysisState>({});
+  const [showAlertOptions, setShowAlertOptions] = useState(false);
   const [formError, setFormError] = useState("");
   const [analysisDefaults, setAnalysisDefaults] = useState({
     capital: 10_000_000,
     riskTolerance: 15,
     timeHorizon: "medium" as TimeHorizon,
   });
-  const [syncMessage, setSyncMessage] = useState("Memuat mode penyimpanan...");
+  const [syncMessage, setSyncMessage] = useState("Menyiapkan pantauan...");
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -83,7 +84,7 @@ export default function WatchlistPage() {
           if (!isMounted) return;
           setItems(storedItems);
           setAlertRules(storedAlertRules);
-          setSyncMessage("Login untuk sinkronisasi antar perangkat.");
+          setSyncMessage("Pantauan aman di perangkat ini.");
           setIsHydrated(true);
           return;
         }
@@ -98,8 +99,8 @@ export default function WatchlistPage() {
           localArahDanaStorage.writeWatchlist(nextItems);
           setSyncMessage(
             cloudItems.length > 0
-              ? "Cloud sync enabled. Watchlist dimuat dari Supabase dan dicadangkan lokal."
-              : "Cloud sync enabled. Belum ada watchlist cloud; data lokal akan dicadangkan saat berubah.",
+              ? "Pantauan siap dan terjaga."
+              : "Pantauan siap. Data baru akan dijaga otomatis.",
           );
         } catch (error) {
           if (!isMounted) return;
@@ -107,8 +108,8 @@ export default function WatchlistPage() {
           setAlertRules(storedAlertRules);
           setSyncMessage(
             error instanceof Error
-              ? `Cloud sync gagal, memakai localStorage. ${error.message}`
-              : "Cloud sync gagal, memakai localStorage.",
+              ? `Pantauan tetap aman di perangkat ini. ${error.message}`
+              : "Pantauan tetap aman di perangkat ini.",
           );
         } finally {
           if (isMounted) setIsHydrated(true);
@@ -127,13 +128,13 @@ export default function WatchlistPage() {
 
     void saveCloudWatchlist(user, items)
       .then(() => {
-        setSyncMessage("Cloud sync enabled. Watchlist tersimpan di Supabase dan localStorage.");
+        setSyncMessage("Pantauan tersimpan.");
       })
       .catch((error) => {
         setSyncMessage(
           error instanceof Error
-            ? `Local backup tersimpan, cloud sync gagal. ${error.message}`
-            : "Local backup tersimpan, cloud sync gagal.",
+            ? `Pantauan tersimpan di perangkat ini. ${error.message}`
+            : "Pantauan tersimpan di perangkat ini.",
         );
       });
   }, [isHydrated, items, user]);
@@ -275,13 +276,13 @@ export default function WatchlistPage() {
             {editingId ? "Edit item pantauan" : "Pantau instrumen"}
           </h2>
           <span className="w-fit rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
-            {user ? "Cloud sync enabled" : isConfigured ? "Local mode" : "Local mode"}
+            {user ? "Data aman" : isConfigured ? "Aman" : "Aman"}
           </span>
         </div>
         <div className="mt-4 rounded-lg bg-stone-100 p-4 text-sm leading-6 text-stone-600">
           <p className="font-semibold text-stone-950">Mode penyimpanan</p>
           <p className="mt-1">
-            Mode lokal menyimpan data hanya di browser ini. Cloud sync menyimpan data ke akun Supabase agar bisa dipakai di perangkat lain.
+            ArahDana menjaga data tetap rapi. Login membuatnya lebih mudah dipakai di perangkat lain.
           </p>
           <p className="mt-2 font-medium">{syncMessage}</p>
         </div>
@@ -359,7 +360,16 @@ export default function WatchlistPage() {
       </form>
 
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Pantauan</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold">Pantauan</h2>
+          <button
+            type="button"
+            onClick={() => setShowAlertOptions((current) => !current)}
+            className="w-fit rounded-lg border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-100"
+          >
+            {showAlertOptions ? "Sembunyikan opsi" : "Opsi lanjut"}
+          </button>
+        </div>
         <div className="mt-4 grid gap-3">
           {items.length === 0 ? (
             <div className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
@@ -374,6 +384,7 @@ export default function WatchlistPage() {
                 rule.sourceId === item.id,
             );
             const latestCheckedAt = latestAlertCheckedAt(itemAlertRules);
+            const itemStatus = watchlistAlertStatus(itemAlertRules);
 
             return (
             <article
@@ -394,8 +405,11 @@ export default function WatchlistPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-fit rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold uppercase text-stone-700">
+                  <span className="w-fit rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700 ring-1 ring-stone-200">
                     {watchlistStatusLabel(item.status)}
+                  </span>
+                  <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
+                    {itemStatus}
                   </span>
                   <button
                     type="button"
@@ -407,12 +421,14 @@ export default function WatchlistPage() {
                       ? "Menganalisis..."
                       : "Analisis"}
                   </button>
-                  <Link
-                    href={`/alerts?source=watchlist&id=${encodeURIComponent(item.id)}`}
-                    className="rounded-md border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
-                  >
-                    Create Alert
-                  </Link>
+                  {showAlertOptions ? (
+                    <Link
+                      href={`/alerts?source=watchlist&id=${encodeURIComponent(item.id)}`}
+                      className="rounded-md border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                    >
+                      Atur pantauan
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => startEditing(item)}
@@ -429,11 +445,13 @@ export default function WatchlistPage() {
                   </button>
                 </div>
               </div>
-              <div className="mt-3 grid gap-2 rounded-lg bg-stone-100 p-3 sm:grid-cols-3">
-                <AlertMeta label="Alert status" value={watchlistAlertStatus(itemAlertRules)} />
-                <AlertMeta label="Active alerts" value={String(itemAlertRules.filter((rule) => rule.enabled).length)} />
-                <AlertMeta label="Last checked" value={latestCheckedAt ? formatDateTime(latestCheckedAt) : "Belum pernah"} />
-              </div>
+              {showAlertOptions ? (
+                <div className="mt-3 grid gap-2 rounded-lg bg-stone-100 p-3 sm:grid-cols-3">
+                  <AlertMeta label="Kondisi" value={itemStatus} />
+                  <AlertMeta label="Dipantau" value={String(itemAlertRules.filter((rule) => rule.enabled).length)} />
+                  <AlertMeta label="Pembaruan" value={latestCheckedAt ? formatDateTime(latestCheckedAt) : "Belum ada"} />
+                </div>
+              ) : null}
               <p className="mt-3 text-sm font-medium text-emerald-700">
                 Target: {item.targetBuyZone}
               </p>
@@ -471,11 +489,11 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function watchlistAlertStatus(rules: AlertRule[]) {
-  if (rules.length === 0) return "No alert";
-  if (rules.some((rule) => rule.lastCheckStatus === "triggered")) return "Triggered";
-  if (rules.some((rule) => rule.lastCheckStatus === "error")) return "Needs check";
-  if (rules.some((rule) => rule.enabled)) return "Active";
-  return "Inactive";
+  if (rules.length === 0) return "Stabil";
+  if (rules.some((rule) => rule.lastCheckStatus === "triggered")) return "Perlu perhatian";
+  if (rules.some((rule) => rule.lastCheckStatus === "error")) return "Dipantau";
+  if (rules.some((rule) => rule.enabled)) return "Dipantau otomatis";
+  return "Stabil";
 }
 
 function latestAlertCheckedAt(rules: AlertRule[]) {
@@ -534,8 +552,7 @@ function WatchlistAnalysisPanel({
   if (state.isLoading) {
     return (
       <div className="mt-4 rounded-lg bg-stone-100 p-4 text-sm text-stone-600">
-        Mengambil data pasar publik langsung dan menjalankan analisis
-        deterministik...
+        Menyiapkan analisis terbaru...
       </div>
     );
   }

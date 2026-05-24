@@ -2,15 +2,15 @@
 <html lang="id">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#edf3f7" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#00C878" />
     <title>ArahDana Offline</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: dark;
         font-family: Arial, Helvetica, sans-serif;
-        background: #f7f8f5;
-        color: #1c1917;
+        background: #062d20;
+        color: #ffffff;
       }
 
       body {
@@ -18,56 +18,62 @@
         margin: 0;
         display: grid;
         place-items: center;
-        padding: 24px;
+        padding: calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px);
+        background:
+          linear-gradient(180deg, rgba(6, 45, 32, 0.92), rgba(3, 20, 15, 1)),
+          #062d20;
       }
 
       main {
-        width: min(100%, 520px);
-        border: 1px solid #d6d3d1;
-        border-radius: 12px;
-        background: #ffffff;
-        padding: 28px;
-        box-shadow: 0 12px 28px rgba(28, 25, 23, 0.08);
+        display: grid;
+        width: min(100%, 360px);
+        place-items: center;
+        text-align: center;
       }
 
       .mark {
         display: grid;
-        width: 52px;
-        height: 52px;
+        width: 116px;
+        height: 116px;
         place-items: center;
         overflow: hidden;
-        border-radius: 14px;
-        background: #ffffff;
-        border: 1px solid #d1fae5;
+        border-radius: 32px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow:
+          0 0 72px rgba(0, 200, 120, 0.34),
+          0 24px 72px rgba(0, 0, 0, 0.34);
       }
 
       .mark img {
         display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
+        width: 78%;
+        height: 78%;
+        object-fit: contain;
       }
 
       h1 {
-        margin: 20px 0 8px;
-        font-size: 28px;
+        margin: 26px 0 8px;
+        font-size: 24px;
         line-height: 1.15;
       }
 
       p {
         margin: 0;
-        color: #57534e;
-        font-size: 15px;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 14px;
         line-height: 1.7;
       }
 
       a {
         display: inline-flex;
-        margin-top: 22px;
-        border-radius: 10px;
-        background: #047857;
-        color: #ffffff;
-        padding: 11px 16px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        margin-top: 24px;
+        border-radius: 999px;
+        background: #00c878;
+        color: #062d20;
+        padding: 0 18px;
         font-size: 14px;
         font-weight: 700;
         text-decoration: none;
@@ -80,11 +86,8 @@
         <img src="/icons/arahdana-logo.png" alt="ArahDana" />
       </div>
       <h1>ArahDana sedang offline</h1>
-      <p>
-        Koneksi internet tidak tersedia. Data yang sudah tersimpan di browser tetap aman, dan halaman
-        yang pernah dibuka dapat tersedia kembali setelah koneksi pulih.
-      </p>
-      <a href="/dashboard">Coba buka ulang</a>
+      <p>Koneksi belum tersedia. Coba buka ulang saat jaringan kembali stabil.</p>
+      <a href="/">Buka ulang</a>
     </main>
   </body>
 </html>

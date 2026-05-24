@@ -16,8 +16,11 @@ export default function JournalPage() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    setEntries(readEntries());
-    setIsHydrated(true);
+    const timeoutId = window.setTimeout(() => {
+      setEntries(readEntries());
+      setIsHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {

@@ -43,15 +43,15 @@ export default function ProfilePage() {
       </section>
 
       <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-stone-950">Cloud sync</h2>
+        <h2 className="text-lg font-semibold text-stone-950">Data akun</h2>
         <p className="mt-2 text-sm font-medium text-stone-600">
           {isLoading
             ? "Memeriksa sesi..."
             : !isConfigured
               ? "Supabase belum dikonfigurasi."
               : user
-                ? "Cloud sync aktif untuk akun ini."
-                : "Local mode. Login untuk sinkronisasi antar perangkat."}
+                ? "Data aman untuk akun ini."
+                : "Data aman di perangkat ini. Login agar lebih mudah dipakai di perangkat lain."}
         </p>
         <Link
           href={user ? "/settings" : "/login"}

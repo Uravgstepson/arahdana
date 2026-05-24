@@ -2,10 +2,21 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { LoadingState } from "@/components/AppState";
 import { useAuth } from "@/components/AuthProvider";
 import { PortfolioHealthCard } from "@/components/PortfolioHealthCard";
+import {
+  PortfolioPrivacyToggle,
+  PrivateValue,
+} from "@/components/PrivateValue";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type {
   AppNotification,
@@ -70,11 +81,13 @@ export default function DashboardPage() {
   );
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [goals, setGoals] = useState<FinancialGoal[]>([]);
-  const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([]);
+  const [goalContributions, setGoalContributions] = useState<
+    GoalContribution[]
+  >([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
   const [riskTolerance, setRiskTolerance] = useState(15);
-  const [greetingTemplate, setGreetingTemplate] = useState("Halo, {name}");
+  const [greetingTemplate] = useState(() => readSessionGreetingTemplate());
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -215,16 +228,46 @@ export default function DashboardPage() {
   }, [isAuthLoading, user]);
 
   useEffect(() => {
-    setGreetingTemplate(readSessionGreetingTemplate());
-  }, []);
+    if (!isHydrated) return;
+
+    function handlePortfolioPricesUpdated() {
+      const latestPortfolio = localArahDanaStorage.readPortfolio();
+      if (Array.isArray(latestPortfolio)) {
+        setPortfolio(latestPortfolio.map(normalizePortfolioItem));
+      }
+      setNotifications(localArahDanaStorage.readNotifications() ?? []);
+    }
+
+    window.addEventListener(
+      "arahdana:portfolio-prices-updated",
+      handlePortfolioPricesUpdated,
+    );
+    window.addEventListener(
+      "arahdana:notifications-updated",
+      handlePortfolioPricesUpdated,
+    );
+    return () => {
+      window.removeEventListener(
+        "arahdana:portfolio-prices-updated",
+        handlePortfolioPricesUpdated,
+      );
+      window.removeEventListener(
+        "arahdana:notifications-updated",
+        handlePortfolioPricesUpdated,
+      );
+    };
+  }, [isHydrated]);
 
   const metrics = useMemo(
     () => calculateDashboardMetrics(portfolio, aprMoneyMarketFund),
     [aprMoneyMarketFund, portfolio],
   );
   const hasPortfolio = portfolio.length > 0;
-  const syncLabel = user ? "Cloud sync" : "Local";
-  const displayName = getDisplayName(profile?.display_name, user?.email);
+  const syncLabel = user ? "Data aman" : "Aman";
+  const displayName = getDisplayName(
+    profile?.full_name ?? profile?.display_name,
+    user?.email,
+  );
   const greeting = formatGreeting(greetingTemplate, displayName);
   const latestRecommendations = analysisResults.slice(0, 3);
   const latestAlert =
@@ -236,10 +279,9 @@ export default function DashboardPage() {
         goalContributions,
         latestAlert,
         metrics,
-        portfolio,
         watchlist,
       }),
-    [goals, goalContributions, latestAlert, metrics, portfolio, watchlist],
+    [goals, goalContributions, latestAlert, metrics, watchlist],
   );
 
   if (!isHydrated) {
@@ -252,26 +294,33 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <HomeGreetingInsightCard greeting={greeting} insights={insights} />
+    <div className="section-stack">
+      <HomeGreetingCard greeting={greeting} />
 
-      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
+      <HomeInsightCarousel insights={insights} />
+
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.55rem] p-5 text-white sm:p-6">
         <div className="flex items-center justify-between gap-3">
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-emerald-100 ring-1 ring-white/15">
-            {syncLabel}
-          </span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold leading-none text-emerald-100 ring-1 ring-white/15">
+              {syncLabel}
+            </span>
+          </div>
           <Link
-            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-stone-950"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-[1rem] bg-emerald-500 px-4 text-sm font-semibold text-white ring-1 ring-emerald-300/30 shadow-[0_10px_24px_rgba(16,185,129,0.18)] hover:bg-emerald-600"
             href="/portfolio"
           >
             Kelola
           </Link>
         </div>
-        <div className="mt-8">
+        <div className="mt-7">
           <p className="text-sm font-medium text-white/62">Total nilai</p>
-          <p className="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">
-            {formatRupiah(metrics.current)}
-          </p>
+          <div className="mt-2 flex min-w-0 items-center gap-2.5">
+            <p className="min-w-0 break-words text-[2.35rem] font-semibold leading-none tracking-tight sm:text-5xl">
+              <PrivateValue>{formatRupiah(metrics.current)}</PrivateValue>
+            </p>
+            <PortfolioPrivacyToggle className="h-9 w-9 bg-white/12" />
+          </div>
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <DashboardMetric
@@ -281,7 +330,7 @@ export default function DashboardPage() {
           />
           <DashboardMetric
             label="Total P/L"
-            value={formatRupiah(metrics.profit)}
+            value={<PrivateValue>{formatRupiah(metrics.profit)}</PrivateValue>}
             helper={formatPercent(metrics.profitPercent)}
             tone={metrics.profit >= 0 ? "good" : "bad"}
           />
@@ -295,20 +344,20 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+      <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-lg font-semibold text-stone-950">
             Alokasi ringkas
           </h2>
-          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
+          <span className="inline-flex min-h-7 items-center rounded-full bg-stone-100 px-3 text-xs font-semibold leading-none text-stone-600 ring-1 ring-stone-200/70">
             {portfolio.length} holding
           </span>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {metrics.allocation.length === 0 ? (
             <Link
-              className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
-              href="/portfolio"
+              className="col-span-full inline-flex min-h-11 items-center justify-center rounded-[1rem] bg-emerald-500 px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(16,185,129,0.16)] hover:bg-emerald-600"
+              href="/porto/add"
             >
               Tambah portofolio
             </Link>
@@ -316,20 +365,24 @@ export default function DashboardPage() {
           {metrics.allocation.map((item) => (
             <div
               key={item.type}
-              className="rounded-full bg-stone-100 px-4 py-2 text-sm font-semibold text-stone-700 ring-1 ring-stone-200"
+              className="min-w-0 rounded-[1.2rem] bg-stone-50 px-3 py-3 ring-1 ring-stone-200 transition-all 260ms ease-soft hover:bg-stone-100"
             >
-              {investmentTypeLabel(item.type)}{" "}
-              <span className="text-stone-500">{item.percent}%</span>
+              <p className="truncate text-xs font-semibold text-stone-500">
+                {shortAllocationLabel(item.type)}
+              </p>
+              <p className="mt-2 text-sm font-semibold text-stone-950">
+                {item.percent}%
+              </p>
             </div>
           ))}
         </div>
       </section>
 
-      <details className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+      <details className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
         <summary className="cursor-pointer text-sm font-semibold text-stone-950">
           Detail portofolio
         </summary>
-        <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_0.95fr]">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.95fr]">
           <AllocationChart
             title="Alokasi"
             compact
@@ -342,14 +395,14 @@ export default function DashboardPage() {
             emptyMessage="Belum ada alokasi. Tambahkan kepemilikan manual dulu."
           />
 
-          <section className="rounded-[1.4rem] bg-stone-100 p-4">
+          <section className="rounded-[1.4rem] bg-stone-50 p-5 ring-1 ring-stone-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Performa</h2>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-stone-600">
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-stone-600 ring-1 ring-stone-200">
                 {metrics.riskSummary.label}
               </span>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <PerformerCard
                 title="Kenaikan terbaik"
                 performer={metrics.topGainer}
@@ -365,11 +418,11 @@ export default function DashboardPage() {
         </div>
       </details>
 
-      <details className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
+      <details className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
         <summary className="cursor-pointer text-sm font-semibold text-stone-950">
           Pantauan dan rekomendasi
         </summary>
-        <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
           <section className="rounded-[1.4rem] bg-stone-100 p-4">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-lg font-semibold">Pantauan</h2>
@@ -433,7 +486,7 @@ export default function DashboardPage() {
                 </div>
               ))}
               {latestRecommendations.length === 0 ? (
-                <EmptyMini href="/analyzer" label="Buat analisis" />
+                <EmptyMini href="/analysis/new" label="Buat analisis" />
               ) : null}
             </div>
           </section>
@@ -441,23 +494,21 @@ export default function DashboardPage() {
       </details>
 
       {hasPortfolio ? (
-        <div>
-          <PortfolioHealthCard
-            portfolio={portfolio}
-            riskTolerance={riskTolerance}
-            aprMoneyMarketFund={aprMoneyMarketFund}
-          />
-        </div>
+        <PortfolioHealthCard
+          portfolio={portfolio}
+          riskTolerance={riskTolerance}
+          aprMoneyMarketFund={aprMoneyMarketFund}
+        />
       ) : null}
 
       {!hasPortfolio && isHydrated ? (
-        <section className="rounded-[1.6rem] border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
+        <section className="rounded-[1.5rem] border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
           <h2 className="text-lg font-semibold text-stone-950">
             Portofolio masih kosong
           </h2>
           <Link
-            className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm"
-            href="/portfolio"
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-[1rem] bg-emerald-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600"
+            href="/porto/add"
           >
             Tambah portofolio
           </Link>
@@ -467,11 +518,22 @@ export default function DashboardPage() {
   );
 }
 
-const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
-  greeting,
+function HomeGreetingCard({ greeting }: { greeting: string }) {
+  return (
+    <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
+        ArahDana
+      </p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-950">
+        {greeting}
+      </h2>
+    </section>
+  );
+}
+
+const HomeInsightCarousel = memo(function HomeInsightCarousel({
   insights,
 }: {
-  greeting: string;
   insights: HomeInsight[];
 }) {
   const performanceProfile = usePerformanceMode();
@@ -502,7 +564,12 @@ const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
   ]);
 
   useEffect(() => {
-    setActiveIndex((current) => Math.min(current, Math.max(0, insights.length - 1)));
+    const timeoutId = window.setTimeout(() => {
+      setActiveIndex((current) =>
+        Math.min(current, Math.max(0, insights.length - 1)),
+      );
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [insights.length]);
 
   function goTo(index: number) {
@@ -512,8 +579,8 @@ const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
 
   function move(direction: 1 | -1) {
     setInteractionKey((current) => current + 1);
-    setActiveIndex((current) =>
-      (current + direction + insights.length) % insights.length,
+    setActiveIndex(
+      (current) => (current + direction + insights.length) % insights.length,
     );
   }
 
@@ -521,8 +588,8 @@ const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
 
   return (
     <section
-      className="overflow-hidden rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6"
-      aria-label="Insight Home"
+      className="overflow-hidden rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6"
+      aria-label="Info Home"
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
       }}
@@ -530,21 +597,13 @@ const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
         const startX = touchStartX.current;
         touchStartX.current = null;
         const endX = event.changedTouches[0]?.clientX;
-        if (startX === null || endX === undefined || insights.length <= 1) return;
+        if (startX === null || endX === undefined || insights.length <= 1)
+          return;
         const delta = endX - startX;
         if (Math.abs(delta) > 42) move(delta < 0 ? 1 : -1);
       }}
     >
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
-          ArahDana
-        </p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-950">
-          {greeting}
-        </h2>
-      </div>
-
-      <div className="mt-5 flex items-start justify-between gap-3 border-t border-stone-200 pt-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
             {activeInsight.eyebrow}
@@ -559,7 +618,7 @@ const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
         {activeInsight.href ? (
           <Link
             href={activeInsight.href}
-            className="shrink-0 rounded-full bg-stone-950 px-3 py-2 text-xs font-semibold text-white"
+            className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-stone-950 px-3 text-xs font-semibold leading-none text-white"
           >
             Buka
           </Link>
@@ -574,7 +633,9 @@ const HomeGreetingInsightCard = memo(function HomeGreetingInsightCard({
               type="button"
               onClick={() => goTo(index)}
               className={`h-2 rounded-full transition-all ${
-                index === activeIndex ? "w-6 bg-emerald-700" : "w-2 bg-stone-300"
+                index === activeIndex
+                  ? "w-6 bg-emerald-700"
+                  : "w-2 bg-stone-300"
               }`}
               aria-label={`Insight ${index + 1}`}
               aria-current={index === activeIndex}
@@ -593,8 +654,8 @@ function DashboardMetric({
   tone = "neutral",
 }: {
   label: string;
-  value: string;
-  helper: string;
+  value: ReactNode;
+  helper: ReactNode;
   tone?: "neutral" | "good" | "bad";
 }) {
   const valueClass =
@@ -605,12 +666,18 @@ function DashboardMetric({
         : "text-white";
 
   return (
-    <div className="rounded-[1.25rem] bg-white/8 p-4 ring-1 ring-white/10">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/52">
+    <div className="rounded-[1.15rem] bg-white/8 px-3.5 py-3 ring-1 ring-white/10">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-white/52">
         {label}
       </p>
-      <p className={`mt-2 text-lg font-semibold ${valueClass}`}>{value}</p>
-      <p className="mt-1 text-xs font-medium text-white/50">{helper}</p>
+      <p
+        className={`mt-2 min-w-0 break-words text-base font-semibold ${valueClass}`}
+      >
+        {value}
+      </p>
+      <p className="mt-1 min-w-0 break-words text-xs font-medium leading-5 text-white/50">
+        {helper}
+      </p>
     </div>
   );
 }
@@ -647,7 +714,7 @@ function PerformerCard({
             {performer.item.name}
           </p>
           <p className={`mt-1 text-sm font-semibold ${toneClass}`}>
-            {formatRupiah(performer.profit)} (
+            <PrivateValue>{formatRupiah(performer.profit)}</PrivateValue> (
             {formatPercent(performer.profitPercent)})
           </p>
           <p className="mt-1 text-xs text-stone-500">
@@ -659,6 +726,15 @@ function PerformerCard({
       )}
     </div>
   );
+}
+
+function shortAllocationLabel(type: InvestmentType) {
+  if (type === "money_market_fund") return "Pasar Uang";
+  if (type === "equity_fund") return "Saham";
+  if (type === "bond_fund") return "Obligasi";
+  if (type === "mixed_fund") return "Campuran";
+  if (type === "cash_savings") return "Cash";
+  return investmentTypeLabel(type);
 }
 
 function verdictChipClass(verdict: SavedAnalysisResult["result"]["verdict"]) {
@@ -830,14 +906,12 @@ function buildHomeInsights({
   goalContributions,
   latestAlert,
   metrics,
-  portfolio,
   watchlist,
 }: {
   goals: FinancialGoal[];
   goalContributions: GoalContribution[];
   latestAlert: AppNotification | null;
   metrics: ReturnType<typeof calculateDashboardMetrics>;
-  portfolio: PortfolioItem[];
   watchlist: WatchlistItem[];
 }): HomeInsight[] {
   const insights: HomeInsight[] = [];
@@ -849,21 +923,6 @@ function buildHomeInsights({
       title: latestAlert.title,
       message: latestAlert.message,
       href: "/notifications",
-    });
-  }
-
-  if (portfolio.length > 0) {
-    insights.push({
-      id: "health",
-      eyebrow: "Portfolio Health",
-      title:
-        metrics.healthScore >= 80
-          ? "Portofolio terlihat cukup sehat."
-          : metrics.healthScore >= 60
-            ? "Portofolio masih perlu dipantau."
-            : "Health Score perlu dicek.",
-      message: `Skor saat ini ${metrics.healthScore}/100. ${metrics.riskSummary.detail}.`,
-      href: "/portfolio#health-score",
     });
   }
 
@@ -889,12 +948,15 @@ function buildHomeInsights({
       id: "goal-dca",
       eyebrow: "DCA / Goals",
       title: "DCA bulan ini belum dicatat.",
-      message: "Catat kontribusi saat sudah dilakukan supaya progress tujuan tetap rapi.",
+      message:
+        "Catat kontribusi saat sudah dilakukan supaya progress tujuan tetap rapi.",
       href: "/goals",
     });
   }
 
-  const waitingWatchlist = watchlist.filter((item) => item.status === "waiting");
+  const waitingWatchlist = watchlist.filter(
+    (item) => item.status === "waiting",
+  );
   if (waitingWatchlist.length > 0) {
     insights.push({
       id: "watchlist",
@@ -909,7 +971,8 @@ function buildHomeInsights({
     id: "market-note",
     eyebrow: "Catatan Pasar",
     title: "Gunakan mode defensif saat data belum lengkap.",
-    message: "ArahDana memakai data tersimpan dan sinyal internal, bukan berita live.",
+    message:
+      "ArahDana memakai data tersimpan dan sinyal tenang agar review tetap jelas.",
     href: "/market-insight",
   });
 
@@ -917,7 +980,8 @@ function buildHomeInsights({
     id: "calm-tip",
     eyebrow: "Tip tenang",
     title: "Keputusan baik biasanya punya alasan tertulis.",
-    message: "Catat alasan beli, tunggu, atau hindari agar review berikutnya lebih objektif.",
+    message:
+      "Catat alasan beli, tunggu, atau hindari agar review berikutnya lebih objektif.",
     href: "/journal",
   });
 
@@ -952,7 +1016,10 @@ function getDisplayName(displayName?: string | null, email?: string | null) {
   const profileName = displayName?.trim();
   if (profileName) return profileName;
 
-  const emailName = email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  const emailName = email
+    ?.split("@")[0]
+    ?.replace(/[._-]+/g, " ")
+    .trim();
   if (emailName) return titleCase(emailName);
 
   return "Investor";

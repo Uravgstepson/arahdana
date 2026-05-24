@@ -26,6 +26,47 @@ export const STORAGE_KEYS = {
   betaTestFeedback: "arahdana.betaTestFeedback",
 } as const;
 
+const USER_SCOPED_KEYS = new Set<string>([
+  STORAGE_KEYS.portfolio,
+  STORAGE_KEYS.watchlist,
+  STORAGE_KEYS.settings,
+  STORAGE_KEYS.analysisResults,
+  STORAGE_KEYS.goals,
+  STORAGE_KEYS.goalContributions,
+  STORAGE_KEYS.notifications,
+  STORAGE_KEYS.alertRules,
+  STORAGE_KEYS.reports,
+]);
+
+const ACTIVE_USER_KEY = "arahdana.activeUserId";
+let activeUserId: string | null = null;
+let storageWriteEventsPaused = false;
+
+export function setArahDanaStorageUser(userId: string | null) {
+  activeUserId = userId;
+  if (typeof window === "undefined") return;
+
+  if (userId) {
+    window.localStorage.setItem(ACTIVE_USER_KEY, userId);
+  } else {
+    window.localStorage.removeItem(ACTIVE_USER_KEY);
+  }
+}
+
+export function getArahDanaStorageUser() {
+  return activeUserId ?? readPersistedActiveUserId();
+}
+
+export function setArahDanaStorageWriteEventsPaused(paused: boolean) {
+  storageWriteEventsPaused = paused;
+}
+
+export function clearArahDanaRuntimeState() {
+  setArahDanaStorageUser(null);
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("arahdana:auth-signed-out"));
+}
+
 export type ArahDanaStorageAdapter = {
   readPortfolio(): PortfolioItem[] | null;
   writePortfolio(items: PortfolioItem[]): void;
@@ -138,7 +179,7 @@ function readJson<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const value = window.localStorage.getItem(key);
+    const value = window.localStorage.getItem(storageKey(key));
     return value ? (JSON.parse(value) as T) : null;
   } catch {
     return null;
@@ -147,5 +188,30 @@ function readJson<T>(key: string): T | null {
 
 function writeJson<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  const scopedKey = storageKey(key);
+  window.localStorage.setItem(scopedKey, JSON.stringify(value));
+  if (!storageWriteEventsPaused) {
+    window.dispatchEvent(
+      new CustomEvent("arahdana:storage-write", {
+        detail: {
+          key,
+          scopedKey,
+          userId: getArahDanaStorageUser(),
+        },
+      }),
+    );
+  }
+}
+
+function storageKey(key: string) {
+  if (!USER_SCOPED_KEYS.has(key)) return key;
+  const userId = activeUserId ?? readPersistedActiveUserId();
+  if (!userId) return key;
+  return `arahdana.user.${userId}.${key.replace(/^arahdana\./, "")}`;
+}
+
+function readPersistedActiveUserId() {
+  if (typeof window === "undefined") return null;
+  const value = window.localStorage.getItem(ACTIVE_USER_KEY);
+  return value?.trim() || null;
 }

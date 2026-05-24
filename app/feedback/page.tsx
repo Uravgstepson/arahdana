@@ -105,7 +105,7 @@ export default function FeedbackPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <section className="rounded-[1.8rem] bg-stone-950 p-6 text-white shadow-sm">
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.8rem] p-6 text-white">
         <p className="text-sm font-medium text-white/62">Beta feedback</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight">Bantu rapikan ArahDana</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">

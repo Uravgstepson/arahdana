@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { BrandMark } from "@/components/BrandMark";
 
 const features = [
   {
@@ -30,23 +31,21 @@ const features = [
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[#eef5f2] text-stone-950">
-      <section className="relative isolate min-h-[92svh] overflow-hidden bg-stone-950 text-white">
+    <main className="public-art-background text-stone-950">
+      <section className="relative isolate min-h-[92svh] overflow-hidden bg-stone-950/78 text-white">
         <Image
-          src="/icons/arahdana-logo.png"
+          src="/icons/Logo_full_brand-removebg-preview.png"
           alt=""
           width={900}
           height={900}
           priority
-          className="absolute right-[-9rem] top-12 h-[34rem] w-[34rem] max-w-none opacity-20 blur-[1px] sm:right-[-5rem] sm:h-[42rem] sm:w-[42rem]"
+          className="absolute right-[-9rem] top-12 h-[34rem] w-[34rem] max-w-none object-contain opacity-[0.16] sm:right-[-5rem] sm:h-[42rem] sm:w-[42rem]"
         />
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(180deg,rgba(12,10,9,0),#eef5f2)]" />
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(180deg,rgba(12,10,9,0),rgba(238,245,242,0.9))]" />
         <div className="relative mx-auto flex min-h-[92svh] max-w-6xl flex-col px-5 pb-24 pt-5 sm:px-6 lg:px-8">
           <header className="flex items-center justify-between gap-3">
             <Link href="/" className="flex items-center gap-3" aria-label="ArahDana">
-              <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-[1rem] bg-white">
-                <Image src="/icons/arahdana-logo.png" alt="" width={44} height={44} />
-              </span>
+              <BrandMark variant="icon" tone="light" className="h-11 w-11" />
               <span className="text-lg font-semibold tracking-tight">ArahDana</span>
             </Link>
             <nav className="flex items-center gap-2">
@@ -100,7 +99,7 @@ export default function LandingPage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <HeroStat label="Cloud sync" value="Supabase + local" />
+            <HeroStat label="Data aman" value="Akun + perangkat" />
             <HeroStat label="Analyzer" value="Rule-based" />
             <HeroStat label="Reports" value="Weekly to quarterly" />
           </div>
@@ -140,7 +139,7 @@ export default function LandingPage() {
               Semua sinyal dalam satu ruang yang rapi.
             </h2>
             <p className="mt-4 text-sm leading-6 text-stone-600">
-              Portfolio tracker, analyzer, goals, alerts, reports, dan cloud sync dibuat sebagai satu alur: input data, pahami risiko, lalu review secara berkala.
+              Portfolio tracker, analyzer, goals, pantauan, dan reports dibuat sebagai satu alur: input data, pahami risiko, lalu review secara berkala.
             </p>
           </div>
           <div className="rounded-[1.6rem] bg-stone-950 p-6 text-white shadow-sm">

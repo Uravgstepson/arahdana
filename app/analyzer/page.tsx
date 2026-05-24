@@ -1,5 +1,5 @@
-import { AnalyzerForm } from "@/components/AnalyzerForm";
+import { redirect } from "next/navigation";
 
 export default function AnalyzerPage() {
-  return <AnalyzerForm />;
+  redirect("/analysis/new");
 }

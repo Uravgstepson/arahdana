@@ -3,26 +3,26 @@
 import { useMemo, useState } from "react";
 import type {
   AnalysisInput,
-  AnalysisResult,
   InvestmentType,
   PricePoint,
   SavedAnalysisResult,
   TimeHorizon,
 } from "@/lib/types/investment";
 import { analyzeInvestment } from "@/lib/analysis/analyzeInvestment";
-import { parseManualPrices } from "@/lib/providers/manual";
-import { samplePrices } from "@/lib/utils/sampleData";
 import {
   clampNumber,
   formatRupiah,
   nonNegativeNumber,
 } from "@/lib/utils/format";
-import {
-  AnalyzerResult,
-  AnalyzerResultSkeleton,
-} from "@/components/AnalyzerResult";
 import { useAuth } from "@/components/AuthProvider";
 import { InstrumentOptions } from "@/components/PortfolioTable";
+import { PrivateValue } from "@/components/PrivateValue";
+import {
+  FlowPanel,
+  FlowStep,
+  StickyFlowActions,
+} from "@/components/FocusedFlow";
+import { Button, ButtonLink } from "@/components/ui";
 import {
   findMarketSuggestions,
   normalizeMarketTicker,
@@ -37,12 +37,18 @@ import {
   validateRiskTolerance,
   validateTicker,
 } from "@/lib/validation";
+import {
+  ANALYSIS_RESULT_STORAGE_KEY,
+  type AnalysisResultPayload,
+} from "@/lib/analysis/resultStorage";
 
 type RangeOption = "1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "5y" | "max";
 type IntervalOption = "5m" | "15m" | "1d" | "1wk";
+type AnalysisMode = "market" | null;
 
 export function AnalyzerForm() {
   const { user } = useAuth();
+  const [mode, setMode] = useState<AnalysisMode>(null);
   const [name, setName] = useState("Analisis BBCA");
   const [type, setType] = useState<InvestmentType>("stock");
   const [ticker, setTicker] = useState("BBCA:IDX");
@@ -51,16 +57,10 @@ export function AnalyzerForm() {
   const [capital, setCapital] = useState(10_000_000);
   const [riskTolerance, setRiskTolerance] = useState(15);
   const [timeHorizon, setTimeHorizon] = useState<TimeHorizon>("medium");
-  const [manualPrices, setManualPrices] = useState("");
   const [apiPrices, setApiPrices] = useState<PricePoint[] | null>(null);
-  const [marketMeta, setMarketMeta] = useState<{
-    ticker: string;
-    currency: string | null;
-    exchangeName: string | null;
-    regularMarketPrice: number | null;
-  } | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [apiError, setApiError] = useState("");
+  const [lastFetchedAt, setLastFetchedAt] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [saveStatus, setSaveStatus] = useState<{
     tone: "success" | "error";
@@ -71,69 +71,9 @@ export function AnalyzerForm() {
     [ticker],
   );
 
-  const manualParsedPrices = useMemo(
-    () => parseManualPrices(manualPrices),
-    [manualPrices],
-  );
-  const priceSource = useMemo(() => {
-    if (apiPrices?.length) {
-      return {
-        label:
-          marketMeta?.exchangeName
-            ? `Data pasar: ${marketMeta.exchangeName}`
-            : "Data pasar publik (auto: Google -> fallback Yahoo)",
-        badge: "Data langsung",
-        prices: apiPrices,
-        isMock: false,
-      };
-    }
+  const latestClose = apiPrices?.at(-1);
 
-    if (manualParsedPrices.length > 0) {
-      return {
-        label: "Data manual dari input pengguna",
-        badge: "Data manual",
-        prices: manualParsedPrices,
-        isMock: false,
-      };
-    }
-
-    return {
-      label: "Data contoh",
-      badge: "Data contoh",
-      prices: samplePrices,
-      isMock: true,
-    };
-  }, [apiPrices, manualParsedPrices, marketMeta]);
-
-  const analysisInput: AnalysisInput = useMemo(
-    () => ({
-      name,
-      type,
-      ticker,
-      capital: nonNegativeNumber(capital),
-      riskTolerance: clampNumber(riskTolerance, 5, 30),
-      timeHorizon,
-      prices: priceSource.prices,
-    }),
-    [
-      capital,
-      name,
-      priceSource.prices,
-      riskTolerance,
-      ticker,
-      timeHorizon,
-      type,
-    ],
-  );
-
-  const result: AnalysisResult = useMemo(() => {
-    return analyzeInvestment(analysisInput);
-  }, [analysisInput]);
-
-  const latestClose = priceSource.prices.at(-1);
-
-  async function fetchAndAnalyze(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function loadMarketData() {
     setApiError("");
     setValidationMessage("");
 
@@ -145,7 +85,7 @@ export function AnalyzerForm() {
 
     if (validation) {
       setValidationMessage(validation);
-      return;
+      return null;
     }
 
     setIsFetching(true);
@@ -164,94 +104,146 @@ export function AnalyzerForm() {
       });
 
       setApiPrices(marketData.prices);
-      setMarketMeta({
-        ticker: marketData.ticker ?? ticker.trim().toUpperCase(),
-        currency: marketData.currency ?? null,
-        exchangeName: marketData.exchangeName ?? null,
-        regularMarketPrice: marketData.regularMarketPrice ?? null,
-      });
+      setLastFetchedAt(new Date().toISOString());
+      return {
+        prices: marketData.prices,
+        label: marketData.exchangeName
+          ? `Data pasar: ${marketData.exchangeName}`
+          : "Data pasar publik (auto: Google -> fallback Yahoo)",
+        isMock: false,
+      };
     } catch (error) {
       setApiPrices(null);
-      setMarketMeta(null);
       setApiError(
-        `${error instanceof Error ? error.message : "Data pasar gagal dimuat."} Cadangan manual/contoh tetap tersedia.`,
+        `${error instanceof Error ? error.message : "Data pasar gagal dimuat."} Periksa ticker, rentang, atau koneksi lalu coba lagi.`,
       );
+      return null;
     } finally {
       setIsFetching(false);
     }
   }
 
-  function clearLiveData() {
-    setApiPrices(null);
-    setMarketMeta(null);
-    setApiError("");
-  }
+  async function fetchAndAnalyze(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaveStatus(null);
 
-  async function saveAnalysisResult() {
-    const priceError = validatePrices(priceSource.prices);
+    const fetched = await loadMarketData();
+    if (!fetched) return;
+
+    const priceError = validatePrices(fetched.prices);
     if (priceError) {
-      setSaveStatus({ tone: "error", message: priceError });
+      setValidationMessage(priceError);
       return;
     }
 
+    const input: AnalysisInput = {
+      name,
+      type,
+      ticker,
+      capital: nonNegativeNumber(capital),
+      riskTolerance: clampNumber(riskTolerance, 5, 30),
+      timeHorizon,
+      prices: fetched.prices,
+    };
+    const nextResult = analyzeInvestment(input);
     const saved: SavedAnalysisResult = {
       id: crypto.randomUUID(),
       name,
       type,
       ticker: normalizeSafeTicker(ticker),
-      result,
-      priceSourceLabel: priceSource.label,
-      isMockData: priceSource.isMock,
+      result: nextResult,
+      priceSourceLabel: fetched.label,
+      isMockData: false,
       createdAt: new Date().toISOString(),
+    };
+    const payload: AnalysisResultPayload = {
+      id: saved.id,
+      input,
+      result: nextResult,
+      prices: fetched.prices,
+      dataSourceLabel: fetched.label,
+      isMockData: false,
+      savedSummary: saved,
     };
 
     const existing = localArahDanaStorage.readAnalysisResults() ?? [];
     localArahDanaStorage.writeAnalysisResults([saved, ...existing].slice(0, 50));
+    writeAnalysisPayload(payload);
 
-    if (!user) {
-      setSaveStatus({
-        tone: "success",
-        message: "Hasil analisis tersimpan lokal. Login untuk sinkronisasi antar perangkat.",
-      });
-      return;
+    if (user) {
+      await saveCloudAnalysisResult(user, saved).catch(() => undefined);
     }
 
-    try {
-      await saveCloudAnalysisResult(user, saved);
-      setSaveStatus({
-        tone: "success",
-        message: "Hasil analisis tersimpan lokal dan tersinkron ke Supabase.",
-      });
-    } catch (error) {
-      setSaveStatus({
-        tone: "error",
-        message:
-          error instanceof Error
-            ? `Hasil tersimpan lokal, tetapi cloud sync gagal. ${error.message}`
-            : "Hasil tersimpan lokal, tetapi cloud sync gagal.",
-      });
-    }
+    window.location.assign(`/analysis/result?id=${encodeURIComponent(saved.id)}`);
+  }
+
+  function clearLiveData() {
+    setApiPrices(null);
+    setApiError("");
+  }
+
+  if (!mode) {
+    return (
+      <FlowPanel className="grid gap-3">
+        <ButtonLink
+          href="/goals/new"
+          variant="secondary"
+          className="min-h-24 justify-start rounded-[1.2rem] bg-white p-5 text-left ring-emerald-100 hover:bg-emerald-50 hover:ring-emerald-200"
+        >
+          <span className="grid gap-2">
+            <span className="text-base font-semibold text-stone-950">
+              DCA Planner
+            </span>
+            <span className="text-sm font-medium leading-6 text-stone-500">
+              Buat target, setoran bulanan, profil risiko, dan rencana DCA yang lebih disiplin.
+            </span>
+          </span>
+        </ButtonLink>
+        <button
+          type="button"
+          onClick={() => setMode("market")}
+          className="min-h-24 rounded-[1.2rem] bg-white p-5 text-left ring-1 ring-stone-200 transition hover:bg-stone-50 hover:ring-stone-300"
+        >
+          <span className="block text-base font-semibold text-stone-950">
+            Analisis data pasar
+          </span>
+          <span className="mt-2 block text-sm font-medium leading-6 text-stone-500">
+            Cari ticker, ambil harga pasar terbaru, lalu generate hasil analisis di halaman baru.
+          </span>
+        </button>
+      </FlowPanel>
+    );
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-      <section className="rounded-[1.7rem] border border-stone-200 bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold text-stone-950">
-            Analisis cepat
-          </h2>
-          <span
-            className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
-              priceSource.isMock
-                ? "bg-amber-50 text-amber-800 ring-amber-200"
-                : "bg-emerald-50 text-emerald-700 ring-emerald-200"
-            }`}
+    <div className="grid gap-5">
+      <FlowPanel className="grid gap-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-fit"
+            onClick={() => {
+              setMode(null);
+              setValidationMessage("");
+              setApiError("");
+            }}
           >
-            {priceSource.badge}
+            Pilih fitur lain
+          </Button>
+          <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+            Analisis data pasar
           </span>
         </div>
 
-        <form onSubmit={fetchAndAnalyze} className="mt-4 grid gap-4">
+        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+          <FlowStep number={1} title="Instrumen" active />
+          <FlowStep number={2} title="Data" />
+          <FlowStep number={3} title="Profil" />
+          <FlowStep number={4} title="Hasil" />
+        </div>
+
+        <form id="analysis-setup-form" onSubmit={fetchAndAnalyze} className="grid gap-4">
           <StepLabel value="1" label="Instrumen" />
           <Field label="Nama instrumen">
             <input
@@ -294,7 +286,7 @@ export function AnalyzerForm() {
                   }}
                   className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700 ring-1 ring-stone-200 hover:bg-white"
                 >
-                  {item.ticker} · {item.name}
+                  {item.ticker} - {item.name}
                 </button>
               ))}
             </div>
@@ -337,6 +329,17 @@ export function AnalyzerForm() {
               </select>
             </Field>
           </div>
+          {lastFetchedAt ? (
+            <StatusBox tone="success" title="Data terakhir">
+              Update terakhir {formatDateTime(lastFetchedAt)}.{" "}
+              {latestClose ? (
+                <>
+                  Close terbaru{" "}
+                  <PrivateValue>{formatRupiah(latestClose.close)}</PrivateValue>.
+                </>
+              ) : null}
+            </StatusBox>
+          ) : null}
 
           <StepLabel value="3" label="Profil" />
           <Field label="Modal">
@@ -374,13 +377,6 @@ export function AnalyzerForm() {
               <option value="long">Jangka panjang</option>
             </select>
           </Field>
-
-          <button
-            className="w-full rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isFetching}
-          >
-            {isFetching ? "Mengambil data..." : "Ambil & analisis"}
-          </button>
         </form>
 
         {validationMessage ? (
@@ -395,80 +391,23 @@ export function AnalyzerForm() {
           </StatusBox>
         ) : null}
 
-        <details className="mt-4 rounded-[1.2rem] bg-stone-100 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-stone-950">
-            Sumber data dan input manual
-          </summary>
-          <div className="mt-4 grid gap-4">
-            <StatusBox
-              tone={priceSource.isMock ? "warning" : "success"}
-              title="Sumber harga aktif"
-            >
-              {priceSource.label}. Penutupan terbaru:{" "}
-              {latestClose
-                ? `${formatRupiah(latestClose.close)} (${latestClose.date})`
-                : "Tidak ada data harga valid"}
-              . Jumlah data: {priceSource.prices.length}.
-              {marketMeta ? (
-                <>
-                  {" "}
-                  {marketMeta.ticker} di{" "}
-                  {marketMeta.exchangeName ?? "bursa tidak diketahui"}
-                  {marketMeta.regularMarketPrice
-                    ? `, harga pasar ${formatRupiah(marketMeta.regularMarketPrice)}`
-                    : ""}
-                  .
-                </>
-              ) : null}
-            </StatusBox>
-            <Field label="Harga historis manual opsional">
-              <textarea
-                className="input min-h-32"
-                value={manualPrices}
-                onChange={(event) => {
-                  setManualPrices(event.target.value);
-                  if (apiPrices) clearLiveData();
-                }}
-              />
-            </Field>
-          </div>
-        </details>
-      </section>
-      {isFetching ? (
-        <AnalyzerResultSkeleton />
-      ) : (
-        <div className="space-y-5">
-          <AnalyzerResult
-            input={analysisInput}
-            result={result}
-            prices={priceSource.prices}
-            dataSourceLabel={priceSource.label}
-            isMockData={priceSource.isMock}
-          />
-          <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-stone-950">Simpan analisis</h2>
-                <p className="mt-1 text-sm leading-6 text-stone-600">
-                  Hasil disimpan ke localStorage. Jika login, hasil juga disimpan ke tabel analysis_results di Supabase.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={saveAnalysisResult}
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
-              >
-                Simpan hasil
-              </button>
-            </div>
-            {saveStatus ? (
-              <p className={`mt-3 text-sm font-medium ${saveStatus.tone === "success" ? "text-emerald-700" : "text-rose-700"}`}>
-                {saveStatus.message}
-              </p>
-            ) : null}
-          </section>
-        </div>
-      )}
+        {saveStatus ? (
+          <StatusBox tone={saveStatus.tone} title="Simpan hasil">
+            {saveStatus.message}
+          </StatusBox>
+        ) : null}
+      </FlowPanel>
+
+      <StickyFlowActions>
+        <Button
+          type="submit"
+          form="analysis-setup-form"
+          variant="primary"
+          disabled={isFetching}
+        >
+          {isFetching ? "Mengambil data..." : "Generate hasil"}
+        </Button>
+      </StickyFlowActions>
     </div>
   );
 }
@@ -544,4 +483,37 @@ function StatusBox({
       <p className="mt-1">{children}</p>
     </div>
   );
+}
+
+function writeAnalysisPayload(payload: AnalysisResultPayload) {
+  if (typeof window === "undefined") return;
+
+  try {
+    const raw = window.localStorage.getItem(ANALYSIS_RESULT_STORAGE_KEY);
+    const existing = raw
+      ? (JSON.parse(raw) as AnalysisResultPayload[])
+      : [];
+    const next = [
+      payload,
+      ...existing.filter((item) => item.id !== payload.id),
+    ].slice(0, 20);
+    window.localStorage.setItem(
+      ANALYSIS_RESULT_STORAGE_KEY,
+      JSON.stringify(next),
+    );
+  } catch {
+    window.localStorage.setItem(
+      ANALYSIS_RESULT_STORAGE_KEY,
+      JSON.stringify([payload]),
+    );
+  }
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }

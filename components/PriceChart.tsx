@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import type { PricePoint } from "@/lib/types/investment";
 import { formatRupiah } from "@/lib/utils/format";
+import { PrivateValue } from "@/components/PrivateValue";
 import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import { MeasuredChartFrame } from "@/components/MeasuredChartFrame";
 
@@ -177,7 +178,7 @@ function PriceTooltip({
           .map((item) => (
             <p key={item.name} className="flex items-center justify-between gap-4 text-stone-600">
               <span>{item.name}</span>
-              <span className="font-semibold text-stone-950">{formatRupiah(Number(item.value))}</span>
+              <span className="font-semibold text-stone-950"><PrivateValue>{formatRupiah(Number(item.value))}</PrivateValue></span>
             </p>
           ))}
       </div>

@@ -8,6 +8,9 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   display_name text,
+  full_name text,
+  avatar_url text,
+  provider text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -197,6 +200,9 @@ create table if not exists public.beta_test_feedback (
 
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists display_name text;
+alter table public.profiles add column if not exists full_name text;
+alter table public.profiles add column if not exists avatar_url text;
+alter table public.profiles add column if not exists provider text;
 alter table public.profiles add column if not exists created_at timestamptz not null default now();
 alter table public.profiles add column if not exists updated_at timestamptz not null default now();
 
@@ -385,6 +391,13 @@ to authenticated
 using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
+drop policy if exists "profiles_delete_own" on public.profiles;
+create policy "profiles_delete_own"
+on public.profiles
+for delete
+to authenticated
+using ((select auth.uid()) = id);
+
 drop policy if exists "portfolios_select_own" on public.portfolios;
 create policy "portfolios_select_own"
 on public.portfolios
@@ -493,6 +506,13 @@ for update
 to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
+
+drop policy if exists "settings_delete_own" on public.user_settings;
+create policy "settings_delete_own"
+on public.user_settings
+for delete
+to authenticated
+using ((select auth.uid()) = user_id);
 
 drop policy if exists "analysis_select_own" on public.analysis_results;
 create policy "analysis_select_own"

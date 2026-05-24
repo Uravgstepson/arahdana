@@ -11,7 +11,7 @@ export function IntegrationsCsvImport() {
   const { isLoading: isAuthLoading, user } = useAuth();
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [hasStoredPortfolio, setHasStoredPortfolio] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Memuat mode penyimpanan...");
+  const [statusMessage, setStatusMessage] = useState("Menyiapkan import...");
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -25,7 +25,7 @@ export function IntegrationsCsvImport() {
         if (!isMounted) return;
         setItems(localItems);
         setHasStoredPortfolio(Array.isArray(saved));
-        setStatusMessage("Belum login. Import akan disimpan ke localStorage browser ini.");
+        setStatusMessage("Data akan disimpan aman di perangkat ini.");
         return;
       }
 
@@ -38,8 +38,8 @@ export function IntegrationsCsvImport() {
         localArahDanaStorage.writePortfolio(nextItems);
         setStatusMessage(
           cloudItems.length > 0
-            ? "Login aktif. Data pembanding dimuat dari Supabase."
-            : "Login aktif. Belum ada data cloud; import akan membuat portofolio Supabase.",
+            ? "Data pembanding siap."
+            : "Portofolio siap dibuat dari file pertamamu.",
         );
       } catch (error) {
         if (!isMounted) return;
@@ -47,8 +47,8 @@ export function IntegrationsCsvImport() {
         setHasStoredPortfolio(Array.isArray(saved));
         setStatusMessage(
           error instanceof Error
-            ? `Supabase tidak bisa dimuat, import akan memakai localStorage. ${error.message}`
-            : "Supabase tidak bisa dimuat, import akan memakai localStorage.",
+            ? `Data tetap aman di perangkat ini. ${error.message}`
+            : "Data tetap aman di perangkat ini.",
         );
       }
     })();
@@ -63,9 +63,9 @@ export function IntegrationsCsvImport() {
 
     if (user) {
       await saveCloudPortfolio(user, nextItems);
-      setStatusMessage("Import tersimpan di Supabase dan dicadangkan ke localStorage.");
+      setStatusMessage("Import tersimpan dan siap dipakai.");
     } else {
-      setStatusMessage("Import tersimpan di localStorage browser ini.");
+      setStatusMessage("Import tersimpan di perangkat ini.");
     }
 
     setItems(nextItems);
@@ -73,18 +73,18 @@ export function IntegrationsCsvImport() {
   }
 
   return (
-    <div className="space-y-3">
-      <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-sm font-semibold text-stone-950">Mode import CSV</p>
-        <p className="mt-1 text-sm leading-6 text-stone-600">{statusMessage}</p>
+    <div className="w-full max-w-full min-w-0 space-y-3 overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <section className="w-full max-w-full min-w-0 rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+        <p className="text-sm font-semibold text-stone-950">Import CSV</p>
+        <p className="mt-1 max-w-full break-words text-sm leading-6 text-stone-600">{statusMessage}</p>
       </section>
       <CsvPortfolioImportSection
         existingItems={items}
         hasStoredPortfolio={hasStoredPortfolio}
         onImport={saveImportedItems}
-        storageLabel={user ? "Supabase dan localStorage" : "localStorage"}
+        storageLabel={user ? "akun ArahDana" : "perangkat ini"}
         title="CSV Import Portofolio"
-        description="Import holdings reksadana/Bibit dari CSV tanpa mengunggah file. Kolom yang didukung: name, type, ticker, buy_price, quantity, current_price, buy_date, notes."
+        description="Masukkan data portofolio dari CSV, tinjau pratinjau, lalu simpan saat sudah sesuai."
       />
     </div>
   );

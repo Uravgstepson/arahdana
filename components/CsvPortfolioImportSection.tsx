@@ -66,7 +66,7 @@ export function CsvPortfolioImportSection({
 
     if (importPreview.items.length === 0) {
       setImportError(
-        "Belum ada baris valid untuk diimpor. Gunakan header: name,type,ticker,buy_price,quantity,current_price,buy_date,notes.",
+        "Belum ada baris valid untuk diimpor. Pastikan kolom nama, jenis, harga beli, unit, dan tanggal sudah terisi.",
       );
       return;
     }
@@ -147,40 +147,40 @@ export function CsvPortfolioImportSection({
   }
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <section className="w-full max-w-full min-w-0 overflow-x-hidden rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex w-full max-w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 max-w-full">
           <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
+          <p className="mt-1 max-w-full break-words text-sm leading-6 text-stone-600">
             {description}
           </p>
         </div>
-        <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-          Browser only
+        <span className="w-fit shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+          Aman lokal
         </span>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
-        <div className="grid gap-3">
-          <div className="rounded-lg border border-dashed border-stone-300 bg-white/60 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+      <div className="mt-4 grid w-full max-w-full min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)]">
+        <div className="grid w-full max-w-full min-w-0 gap-3">
+          <div className="w-full max-w-full min-w-0 rounded-lg border border-dashed border-stone-300 bg-white/60 p-4">
+            <div className="flex w-full max-w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 max-w-full">
                 <p className="text-sm font-semibold text-stone-950">
                   Upload CSV lokal
                 </p>
-                <p className="mt-1 text-xs leading-5 text-stone-500">
+                <p className="mt-1 max-w-full break-words text-xs leading-5 text-stone-500">
                   Mendukung .csv, .tsv, .txt, dan .xlsx. File tidak diunggah.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max">
                 <button
                   type="button"
                   onClick={downloadSampleCsv}
-                  className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
+                  className="min-h-11 w-full min-w-0 rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100 sm:w-auto"
                 >
-                  Download sample CSV
+                  Unduh contoh
                 </button>
-                <label className="w-fit cursor-pointer rounded-lg bg-stone-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800">
+                <label className="flex min-h-11 w-full min-w-0 cursor-pointer items-center justify-center rounded-lg bg-stone-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 sm:w-auto">
                   {isReadingImportFile ? "Membaca..." : "Pilih file"}
                   <input
                     type="file"
@@ -193,19 +193,19 @@ export function CsvPortfolioImportSection({
               </div>
             </div>
             {importFileMessage ? (
-              <p className="mt-3 text-sm font-medium text-emerald-700">
+              <p className="mt-3 max-w-full break-words text-sm font-medium text-emerald-700">
                 {importFileMessage}
               </p>
             ) : null}
             {importFileError ? (
-              <p className="mt-3 text-sm font-medium text-rose-700">
+              <p className="mt-3 max-w-full break-words text-sm font-medium text-rose-700">
                 {importFileError}
               </p>
             ) : null}
           </div>
 
           <textarea
-            className="input min-h-44 font-mono text-sm"
+            className="input min-h-44 w-full max-w-full min-w-0 overflow-auto break-all font-mono text-sm"
             value={importText}
             onChange={(event) => {
               setImportText(event.target.value);
@@ -215,23 +215,26 @@ export function CsvPortfolioImportSection({
             placeholder={portfolioImportExample}
           />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+          <div className="flex w-full max-w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex min-w-0 items-start gap-2 text-sm font-medium text-stone-700 sm:items-center">
               <input
                 type="checkbox"
+                className="mt-1 shrink-0 sm:mt-0"
                 checked={replaceMatchingImports}
                 onChange={(event) =>
                   setReplaceMatchingImports(event.target.checked)
                 }
               />
-              Perbarui kepemilikan yang cocok berdasarkan ticker atau nama
+              <span className="min-w-0 break-words">
+                Perbarui kepemilikan yang cocok berdasarkan ticker atau nama
+              </span>
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max">
               <button
                 type="button"
                 onClick={importParsedRows}
                 disabled={!canImport}
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-11 w-full min-w-0 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
               >
                 {isSavingImport ? "Menyimpan..." : "Konfirmasi dan simpan"}
               </button>
@@ -244,7 +247,7 @@ export function CsvPortfolioImportSection({
                   setImportFileMessage("");
                   setImportFileError("");
                 }}
-                className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
+                className="min-h-11 w-full min-w-0 rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100 sm:w-auto"
               >
                 Bersihkan
               </button>
@@ -252,31 +255,31 @@ export function CsvPortfolioImportSection({
           </div>
 
           {importMessage ? (
-            <div className="rounded-lg bg-emerald-50 p-3 text-sm font-medium text-emerald-800 ring-1 ring-emerald-100">
+            <div className="w-full max-w-full min-w-0 break-words rounded-lg bg-emerald-50 p-3 text-sm font-medium text-emerald-800 ring-1 ring-emerald-100">
               {importMessage}
             </div>
           ) : null}
           {importError ? (
-            <div className="rounded-lg bg-rose-50 p-3 text-sm font-medium text-rose-800 ring-1 ring-rose-100">
+            <div className="w-full max-w-full min-w-0 break-words rounded-lg bg-rose-50 p-3 text-sm font-medium text-rose-800 ring-1 ring-rose-100">
               {importError}
             </div>
           ) : null}
         </div>
 
-        <div className="rounded-lg bg-stone-100 p-4">
-          <div className="flex items-center justify-between gap-3">
+        <div className="w-full max-w-full min-w-0 rounded-lg bg-stone-100 p-4">
+          <div className="flex min-w-0 items-center justify-between gap-3">
             <h3 className="font-semibold text-stone-950">Pratinjau</h3>
-            <span className="text-xs font-semibold text-stone-500">
+            <span className="shrink-0 text-xs font-semibold text-stone-500">
               {importPreview.items.length} valid / {importPreview.rowCount}{" "}
               baris
             </span>
           </div>
           {importPreview.items.length > 0 ? (
-            <div className="mt-3 max-h-72 overflow-auto rounded-lg border border-stone-200 bg-white">
-              <table className="w-full min-w-[620px] text-left text-xs">
+            <div className="mt-3 max-h-[70vh] w-full max-w-full min-w-0 overflow-auto rounded-lg border border-stone-200 bg-white">
+              <table className="min-w-[760px] text-left text-xs">
                 <thead className="bg-stone-50 uppercase tracking-wide text-stone-500">
                   <tr>
-                    <th className="px-3 py-2">Nama</th>
+                    <th className="sticky left-0 z-10 min-w-40 bg-stone-50 px-3 py-2">Nama</th>
                     <th className="px-3 py-2">Jenis</th>
                     <th className="px-3 py-2">Ticker</th>
                     <th className="px-3 py-2">Unit</th>
@@ -288,8 +291,8 @@ export function CsvPortfolioImportSection({
                 <tbody className="divide-y divide-stone-100">
                   {importPreview.items.slice(0, 8).map((item, index) => (
                     <tr key={`${item.name}-${index}`}>
-                      <td className="px-3 py-2 font-medium text-stone-950">
-                        {item.name}
+                      <td className="sticky left-0 z-10 max-w-48 bg-white px-3 py-2 font-medium text-stone-950">
+                        <span className="block truncate">{item.name}</span>
                         <span className="block text-[11px] font-normal text-stone-500">
                           {item.buyDate}
                         </span>
@@ -321,29 +324,28 @@ export function CsvPortfolioImportSection({
               </table>
             </div>
           ) : (
-            <p className="mt-3 text-sm leading-6 text-stone-600">
+            <p className="mt-3 max-w-full break-words text-sm leading-6 text-stone-600">
               Pilih file atau tempel CSV untuk melihat data yang akan disimpan.
-              Header yang didukung: name, type, ticker, buy_price, quantity,
-              current_price, buy_date, notes.
+              Pratinjau akan muncul di sini sebelum kamu menyimpan.
             </p>
           )}
           {importPreview.items.length > 8 ? (
-            <p className="mt-2 text-xs font-medium text-stone-500">
+            <p className="mt-2 max-w-full break-words text-xs font-medium text-stone-500">
               Menampilkan 8 baris pertama dari {importPreview.items.length}{" "}
               baris valid.
             </p>
           ) : null}
           {importPreview.errors.length > 0 ? (
-            <div className="mt-3 rounded-lg bg-rose-50 p-3 text-xs font-medium leading-5 text-rose-800 ring-1 ring-rose-100">
+            <div className="mt-3 w-full max-w-full min-w-0 rounded-lg bg-rose-50 p-3 text-xs font-medium leading-5 text-rose-800 ring-1 ring-rose-100">
               {importPreview.errors.slice(0, 5).map((error) => (
-                <p key={error}>{error}</p>
+                <p className="break-words" key={error}>{error}</p>
               ))}
             </div>
           ) : null}
           {importPreview.warnings.length > 0 ? (
-            <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-medium leading-5 text-amber-800 ring-1 ring-amber-100">
+            <div className="mt-3 w-full max-w-full min-w-0 rounded-lg bg-amber-50 p-3 text-xs font-medium leading-5 text-amber-800 ring-1 ring-amber-100">
               {importPreview.warnings.slice(0, 3).map((warning) => (
-                <p key={warning}>{warning}</p>
+                <p className="break-words" key={warning}>{warning}</p>
               ))}
             </div>
           ) : null}

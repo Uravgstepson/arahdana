@@ -1,20 +1,31 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { BrandMark } from "@/components/BrandMark";
+import { ButtonLink, Card, SkeletonBlock } from "@/components/ui";
 
-export function LoadingState({ title = "Memuat data", message = "Sebentar, ArahDana sedang menyiapkan tampilan." }) {
+export function LoadingState({
+  title = "Memuat data",
+  message = "Sebentar, ArahDana sedang menyiapkan tampilan.",
+}) {
   return (
-    <section className="rounded-[1.6rem] border border-stone-200 bg-white p-6 shadow-sm">
-      <div className="h-4 w-28 rounded-full bg-stone-200 motion-safe:animate-pulse" />
-      <div className="mt-5 h-8 w-64 max-w-full rounded-full bg-stone-200 motion-safe:animate-pulse" />
+    <Card className="p-6">
+      <div className="flex items-center gap-3">
+        <BrandMark
+          variant="icon"
+          tone="light"
+          className="motion-safe:animate-pulse"
+        />
+        <SkeletonBlock className="h-4 w-28" />
+      </div>
+      <SkeletonBlock className="mt-5 h-8 w-64 max-w-full" />
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="h-20 rounded-[1.2rem] bg-stone-100 motion-safe:animate-pulse" />
-        <div className="h-20 rounded-[1.2rem] bg-stone-100 motion-safe:animate-pulse" />
-        <div className="h-20 rounded-[1.2rem] bg-stone-100 motion-safe:animate-pulse" />
+        <SkeletonBlock className="h-20 rounded-[1.2rem]" />
+        <SkeletonBlock className="h-20 rounded-[1.2rem]" />
+        <SkeletonBlock className="h-20 rounded-[1.2rem]" />
       </div>
       <p className="sr-only">
         {title}. {message}
       </p>
-    </section>
+    </Card>
   );
 }
 
@@ -30,18 +41,18 @@ export function EmptyState({
   actionLabel?: string;
 }) {
   return (
-    <section className="rounded-[1.6rem] border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
+    <Card className="border-dashed p-6 text-center">
+      <BrandMark variant="full" className="mx-auto mb-4" />
       <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-600">{message}</p>
+      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-600">
+        {message}
+      </p>
       {actionHref && actionLabel ? (
-        <Link
-          href={actionHref}
-          className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
-        >
+        <ButtonLink href={actionHref} variant="primary" className="mt-4">
           {actionLabel}
-        </Link>
+        </ButtonLink>
       ) : null}
-    </section>
+    </Card>
   );
 }
 
@@ -55,7 +66,10 @@ export function ErrorState({
   action?: ReactNode;
 }) {
   return (
-    <section className="rounded-[1.6rem] border border-rose-100 bg-rose-50 p-6 text-rose-950 shadow-sm" role="alert">
+    <section
+      className="rounded-[1.45rem] border border-rose-100 bg-rose-50 p-6 text-rose-950 shadow-sm"
+      role="alert"
+    >
       <h2 className="text-lg font-semibold">{title}</h2>
       <p className="mt-2 text-sm leading-6">{message}</p>
       {action ? <div className="mt-4">{action}</div> : null}

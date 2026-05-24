@@ -21,6 +21,7 @@ import { AccountPanel } from "@/components/AccountPanel";
 import { LoadingState } from "@/components/AppState";
 import { useAuth } from "@/components/AuthProvider";
 import { InstrumentOptions } from "@/components/PortfolioTable";
+import { PrivateValue } from "@/components/PrivateValue";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
@@ -97,7 +98,7 @@ export default function SettingsPage() {
           setSettings(localSettings);
           setCloudSyncStatus({
             tone: "info",
-            message: "Local mode. Login untuk sinkronisasi antar perangkat.",
+            message: "Data aman di perangkat ini.",
           });
           setIsHydrated(true);
           return;
@@ -112,8 +113,8 @@ export default function SettingsPage() {
           setCloudSyncStatus({
             tone: "success",
             message: cloudSettings
-              ? "Cloud sync enabled. Settings dimuat dari Supabase."
-              : "Cloud sync enabled. Belum ada settings cloud; data lokal akan dicadangkan saat berubah.",
+              ? "Pengaturan siap dan terjaga."
+              : "Pengaturan siap. Perubahan baru akan dijaga otomatis.",
           });
         } catch (error) {
           if (!isMounted) return;
@@ -149,7 +150,7 @@ export default function SettingsPage() {
         setCloudSyncStatus({
           tone: "success",
           message:
-            "Cloud sync enabled. Settings tersimpan di Supabase dan localStorage.",
+            "Pengaturan tersimpan.",
         });
       })
       .catch((error) => {
@@ -157,8 +158,8 @@ export default function SettingsPage() {
           tone: "error",
           message:
             error instanceof Error
-              ? `Settings tersimpan lokal, cloud sync gagal. ${error.message}`
-              : "Settings tersimpan lokal, cloud sync gagal.",
+              ? `Pengaturan tersimpan di perangkat ini. ${error.message}`
+              : "Pengaturan tersimpan di perangkat ini.",
         });
       });
   }, [isHydrated, settings, user]);
@@ -353,7 +354,10 @@ export default function SettingsPage() {
           </p>
         ) : null}
         <div className="mt-5 grid gap-4">
-          <Field label={`Modal bawaan: ${formatRupiah(settings.capital)}`}>
+          <Field label="Modal bawaan">
+            <p className="text-sm font-semibold text-stone-950">
+              <PrivateValue>{formatRupiah(settings.capital)}</PrivateValue>
+            </p>
             <input
               className="input"
               type="number"
@@ -638,13 +642,15 @@ function NotificationSettingsSection({
             Pengingat tenang untuk DCA, tujuan, risiko, dan review portofolio. Tidak ada alert spekulatif.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onEnableBrowserNotifications}
-          className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
-        >
-          Enable Notifications
-        </button>
+        {browserPermission !== "granted" && browserPermission !== "unsupported" ? (
+          <button
+            type="button"
+            onClick={onEnableBrowserNotifications}
+            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
+          >
+            Enable Notifications
+          </button>
+        ) : null}
       </div>
 
       <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">

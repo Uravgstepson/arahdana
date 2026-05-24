@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import type {
   AnalysisInput,
   AnalysisResult,
@@ -12,6 +12,7 @@ import {
   type ExplanationMode,
 } from "@/lib/analysis/explanation";
 import { cn, formatPercent, formatRupiah } from "@/lib/utils/format";
+import { PrivateValue } from "@/components/PrivateValue";
 
 const PriceChart = dynamic(
   () => import("@/components/PriceChart").then((module) => module.PriceChart),
@@ -91,7 +92,7 @@ export function AnalyzerResult({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <SummaryItem label="Keyakinan" value={`${result.confidence}%`} />
             <SummaryItem label="Alokasi saran" value={`${result.allocationPercentage}%`} />
-            <SummaryItem label="Nominal alokasi" value={formatRupiah(result.allocationAmount)} />
+            <SummaryItem label="Nominal alokasi" value={<PrivateValue>{formatRupiah(result.allocationAmount)}</PrivateValue>} />
           </div>
         </div>
 
@@ -192,9 +193,9 @@ export function AnalyzerResult({
         <div className="rounded-lg bg-stone-100 p-5">
           <h2 className="text-lg font-semibold text-stone-950">Sinyal tren</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            <Metric label="Close terbaru" value={formatRupiah(latestClose)} />
-            <Metric label="SMA 20" value={hasSma20 ? formatRupiah(result.trend.sma20) : "Belum cukup data"} />
-            <Metric label="SMA 50" value={hasSma50 ? formatRupiah(result.trend.sma50) : "Belum cukup data"} />
+            <Metric label="Close terbaru" value={<PrivateValue>{formatRupiah(latestClose)}</PrivateValue>} />
+            <Metric label="SMA 20" value={hasSma20 ? <PrivateValue>{formatRupiah(result.trend.sma20)}</PrivateValue> : "Belum cukup data"} />
+            <Metric label="SMA 50" value={hasSma50 ? <PrivateValue>{formatRupiah(result.trend.sma50)}</PrivateValue> : "Belum cukup data"} />
           </div>
           <div className={`mt-4 rounded-lg p-4 text-sm leading-6 ring-1 ${trendExplanation.className}`}>
             <p className="font-semibold">{trendExplanation.title}</p>
@@ -295,7 +296,7 @@ export function AnalyzerResultSkeleton() {
   );
 }
 
-function SummaryItem({ label, value }: { label: string; value: string }) {
+function SummaryItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-lg border border-stone-200 p-4">
       <p className="text-sm font-medium text-stone-500">{label}</p>
@@ -304,7 +305,7 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Metric({ label, value, helper }: { label: string; value: string; helper?: string }) {
+function Metric({ label, value, helper }: { label: string; value: ReactNode; helper?: string }) {
   return (
     <div className="rounded-lg bg-stone-100 p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</p>

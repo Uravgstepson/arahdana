@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { useAuth } from "@/components/AuthProvider";
 import { dispatchToast } from "@/components/ToastViewport";
 import {
@@ -10,15 +10,9 @@ import {
   upsertUserProfile,
 } from "@/lib/supabase/auth";
 import {
-  loadCloudAnalysisResults,
-  loadCloudAlertRules,
-  loadCloudGoalContributions,
-  loadCloudGoals,
-  loadCloudPortfolio,
-  loadCloudReports,
-  loadCloudSettings,
-  loadCloudWatchlist,
+  loadCloudUserData,
   syncLocalDataToCloud,
+  writeUserDataSnapshotToLocal,
 } from "@/lib/supabase/sync";
 
 type Status = {
@@ -27,6 +21,7 @@ type Status = {
 };
 
 export function AccountPanel() {
+  const router = useRouter();
   const { isConfigured, isLoading, user, profile, refreshAuth } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [isDisplayNameEdited, setIsDisplayNameEdited] = useState(false);
@@ -35,7 +30,7 @@ export function AccountPanel() {
 
   const displayNameValue = isDisplayNameEdited
     ? displayName
-    : (profile?.display_name ?? "");
+    : (profile?.full_name ?? profile?.display_name ?? "");
 
   async function handleSaveProfile() {
     if (!user) return;
@@ -52,13 +47,13 @@ export function AccountPanel() {
     await runTask(async () => {
       await signOut();
       await refreshAuth();
-      setStatus({ tone: "success", message: "Kamu sudah logout dari akun ini." });
+      router.replace("/login");
     });
   }
 
   async function handleSyncLocalToCloud() {
     if (!user) {
-      setStatus({ tone: "error", message: "Login dulu untuk sinkronisasi cloud." });
+      setStatus({ tone: "error", message: "Masuk dulu untuk menjaga data akun." });
       return;
     }
 
@@ -66,12 +61,12 @@ export function AccountPanel() {
       const result = await syncLocalDataToCloud(user);
       setStatus({
         tone: "success",
-        message: `Data lokal tersinkron: ${result.portfolioCount} holding, ${result.watchlistCount} pantauan, ${result.goalCount} tujuan, ${result.analysisCount} hasil analisis, ${result.alertRuleCount} alert, ${result.reportCount} laporan.`,
+        message: `Data akun siap: ${result.portfolioCount} holding, ${result.watchlistCount} pantauan, ${result.goalCount} tujuan, ${result.analysisCount} analisis, ${result.alertRuleCount} pantauan otomatis, ${result.reportCount} laporan.`,
       });
       dispatchToast({
         tone: "success",
-        title: "Sync complete",
-        message: "Data lokal berhasil tersinkron ke cloud.",
+        title: "Data aman",
+        message: "Data berhasil dijaga untuk akun ini.",
       });
     });
   }
@@ -80,34 +75,17 @@ export function AccountPanel() {
     if (!user) return;
 
     await runTask(async () => {
-      const [portfolio, watchlist, settings, analysisResults, goals, goalContributions, alertRules, reports] = await Promise.all([
-        loadCloudPortfolio(user),
-        loadCloudWatchlist(user),
-        loadCloudSettings(user),
-        loadCloudAnalysisResults(user),
-        loadCloudGoals(user),
-        loadCloudGoalContributions(user),
-        loadCloudAlertRules(user),
-        loadCloudReports(user),
-      ]);
-
-      localArahDanaStorage.writePortfolio(portfolio);
-      localArahDanaStorage.writeWatchlist(watchlist);
-      if (settings) localArahDanaStorage.writeSettings(settings);
-      localArahDanaStorage.writeAnalysisResults(analysisResults);
-      localArahDanaStorage.writeGoals(goals);
-      localArahDanaStorage.writeGoalContributions(goalContributions);
-      localArahDanaStorage.writeAlertRules(alertRules);
-      localArahDanaStorage.writeReports(reports);
+      const snapshot = await loadCloudUserData(user);
+      writeUserDataSnapshotToLocal(snapshot);
       window.dispatchEvent(new Event("arahdana:local-data-updated"));
       setStatus({
         tone: "success",
-        message: `Cloud dipulihkan ke browser ini: ${portfolio.length} holding, ${watchlist.length} pantauan, ${goals.length} tujuan, ${analysisResults.length} hasil analisis, ${alertRules.length} alert, ${reports.length} laporan.`,
+        message: `Data akun dipulihkan: ${snapshot.portfolio.length} holding, ${snapshot.watchlist.length} pantauan, ${snapshot.goals.length} tujuan, ${snapshot.analysisResults.length} analisis, ${snapshot.alertRules.length} pantauan otomatis, ${snapshot.reports.length} laporan.`,
       });
       dispatchToast({
         tone: "success",
-        title: "Cloud dipulihkan",
-        message: "Data cloud sudah dicadangkan ke browser ini.",
+        title: "Data dipulihkan",
+        message: "Data akun sudah siap di perangkat ini.",
       });
     });
   }
@@ -129,11 +107,10 @@ export function AccountPanel() {
   if (!isConfigured) {
     return (
       <section className="rounded-lg border border-amber-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-stone-950">Akun & cloud sync</h2>
+        <h2 className="text-lg font-semibold text-stone-950">Akun & data</h2>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Supabase belum dikonfigurasi. Tambahkan <code>NEXT_PUBLIC_SUPABASE_URL</code> dan{" "}
-          <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, lalu jalankan SQL di{" "}
-          <code>supabase/arahdana-schema.sql</code>.
+          Akun online belum aktif di perangkat ini. ArahDana tetap bisa dipakai
+          dengan data lokal.
         </p>
       </section>
     );
@@ -142,7 +119,7 @@ export function AccountPanel() {
   if (isLoading) {
     return (
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-stone-950">Akun & cloud sync</h2>
+        <h2 className="text-lg font-semibold text-stone-950">Akun & data</h2>
         <p className="mt-2 text-sm text-stone-600">Memeriksa sesi login...</p>
       </section>
     );
@@ -152,7 +129,7 @@ export function AccountPanel() {
     <section className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-stone-950">Akun & cloud sync</h2>
+          <h2 className="text-lg font-semibold text-stone-950">Akun & data</h2>
         </div>
         <span
           className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
@@ -161,7 +138,7 @@ export function AccountPanel() {
               : "bg-amber-50 text-amber-800 ring-amber-100"
           }`}
         >
-          {user ? "Cloud sync enabled" : "Local mode"}
+          {user ? "Data aman" : "Aman"}
         </span>
       </div>
 
@@ -169,7 +146,7 @@ export function AccountPanel() {
         <div className="mt-5 rounded-[1.25rem] bg-stone-100 p-4">
           <Link
             href="/login"
-            className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
+            className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
           >
             Masuk ke akun
           </Link>
@@ -193,7 +170,7 @@ export function AccountPanel() {
                 type="button"
                 onClick={handleSaveProfile}
                 disabled={isBusy}
-                className="rounded-lg bg-stone-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-11 rounded-lg bg-stone-950 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Simpan profil
               </button>
@@ -201,29 +178,29 @@ export function AccountPanel() {
           </div>
 
           <div className="rounded-[1.25rem] bg-stone-100 p-4">
-            <p className="text-sm font-semibold text-stone-950">Sync antar perangkat</p>
+            <p className="text-sm font-semibold text-stone-950">Data akun</p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={handleSyncLocalToCloud}
                 disabled={isBusy}
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Sync Local Data to Cloud
+                Jaga data akun
               </button>
               <button
                 type="button"
                 onClick={handleLoadCloudToLocal}
                 disabled={isBusy}
-                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-stone-700 ring-1 ring-stone-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-11 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-stone-700 ring-1 ring-stone-200 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Ambil cloud ke perangkat ini
+                Pulihkan ke perangkat ini
               </button>
               <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={isBusy}
-                className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-11 rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Logout
               </button>

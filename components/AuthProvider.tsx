@@ -10,8 +10,24 @@ import {
   useState,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { getCurrentUser, getUserProfile, type UserProfile } from "@/lib/supabase/auth";
+import { CloudDataSync } from "@/components/CloudDataSync";
+import {
+  getCurrentUser,
+  upsertUserProfile,
+  type UserProfile,
+} from "@/lib/supabase/auth";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  getArahDanaStorageUser,
+  setArahDanaStorageUser,
+} from "@/lib/storage/localStorage";
+import {
+  hasUserFinancialData,
+  loadCloudUserData,
+  readLocalUserDataSnapshot,
+  syncUserDataSnapshotToCloud,
+  writeUserDataSnapshotToLocal,
+} from "@/lib/supabase/sync";
 
 type AuthContextValue = {
   isConfigured: boolean;
@@ -31,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshAuth = useCallback(async () => {
     if (!configured) {
+      setArahDanaStorageUser(null);
       setUser(null);
       setProfile(null);
       setIsLoading(false);
@@ -38,8 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setIsLoading(true);
+    const previousStorageUser = getArahDanaStorageUser();
+    const preLoginLocalSnapshot = previousStorageUser
+      ? null
+      : readLocalUserDataSnapshot();
     try {
       const currentUser = await getCurrentUser();
+      setArahDanaStorageUser(currentUser?.id ?? null);
       setUser(currentUser);
       if (!currentUser) {
         setProfile(null);
@@ -47,11 +69,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        setProfile(await getUserProfile(currentUser));
+        setProfile(await upsertUserProfile(currentUser));
       } catch {
         setProfile(null);
       }
+
+      try {
+        const cloudSnapshot = await loadCloudUserData(currentUser);
+        if (hasUserFinancialData(cloudSnapshot)) {
+          writeUserDataSnapshotToLocal(cloudSnapshot);
+          return;
+        }
+
+        const scopedLocalSnapshot = readLocalUserDataSnapshot();
+        const migrationSnapshot = hasUserFinancialData(scopedLocalSnapshot)
+          ? scopedLocalSnapshot
+          : preLoginLocalSnapshot && hasUserFinancialData(preLoginLocalSnapshot)
+            ? preLoginLocalSnapshot
+            : cloudSnapshot;
+
+        writeUserDataSnapshotToLocal(migrationSnapshot);
+        await syncUserDataSnapshotToCloud(currentUser, migrationSnapshot);
+      } catch {
+        // If cloud sync is temporarily unavailable, local user-scoped data remains isolated.
+      }
     } catch {
+      setArahDanaStorageUser(null);
       setUser(null);
       setProfile(null);
     } finally {
@@ -87,7 +130,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [configured, isLoading, profile, refreshAuth, user],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <CloudDataSync user={user} />
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

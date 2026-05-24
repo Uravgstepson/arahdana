@@ -12,14 +12,14 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "ArahDana",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
   formatDetection: {
     telephone: false,
   },
   other: {
     "mobile-web-app-capable": "yes",
-    "msapplication-TileColor": "#047857",
+    "msapplication-TileColor": "#00C878",
     "msapplication-tap-highlight": "no",
   },
   icons: {
@@ -35,7 +35,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#edf3f7",
+  themeColor: "#00C878",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

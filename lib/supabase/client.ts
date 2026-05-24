@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 let client: SupabaseClient | null | undefined;
 let hasLoggedEnvStatus = false;
@@ -18,7 +19,7 @@ export function getSupabaseClient() {
     return client;
   }
 
-  client = createClient(supabaseUrl, supabaseAnonKey);
+  client = createBrowserClient(supabaseUrl, supabaseAnonKey);
   return client;
 }
 

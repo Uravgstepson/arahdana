@@ -37,6 +37,7 @@ export default function NotificationsPage() {
     function handleUpdate() {
       setNotifications(readStoredNotifications());
       setSettings(readStoredSettings());
+      setPermission(readBrowserPermission());
     }
 
     window.addEventListener("arahdana:notifications-updated", handleUpdate);
@@ -134,7 +135,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="max-w-4xl space-y-5">
-      <section className="overflow-hidden rounded-[1.8rem] bg-stone-950 p-5 text-white shadow-sm sm:p-6">
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.8rem] p-5 text-white sm:p-6">
         <p className="text-sm font-medium text-white/62">Notification Center</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight">
           Pengingat yang tenang
@@ -145,7 +146,7 @@ export default function NotificationsPage() {
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <HeaderMetric label="Unread" value={`${unreadCount}`} />
           <HeaderMetric label="Total" value={`${notifications.length}`} />
-          <HeaderMetric label="Mode" value={user ? "Cloud prefs" : "Local prefs"} />
+          <HeaderMetric label="Status" value={user ? "Data aman" : "Aman"} />
         </div>
       </section>
 
@@ -158,13 +159,15 @@ export default function NotificationsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={enableBrowserNotifications}
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
-            >
-              Enable Notifications
-            </button>
+            {permission !== "granted" && permission !== "unsupported" ? (
+              <button
+                type="button"
+                onClick={enableBrowserNotifications}
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
+              >
+                Enable Notifications
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={generateNow}

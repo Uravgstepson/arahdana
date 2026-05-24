@@ -1,14 +1,13 @@
 "use client";
 
 import {
-  type FormEvent,
   type ReactNode,
   memo,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import type {
   AlertRule,
   DataSource,
@@ -29,11 +28,13 @@ import {
   nonNegativeNumber,
 } from "@/lib/utils/format";
 import { LoadingState } from "@/components/AppState";
-import { CsvPortfolioImportSection } from "@/components/CsvPortfolioImportSection";
 import { useAuth } from "@/components/AuthProvider";
-import { RiskBadge } from "@/components/RiskBadge";
 import { InstrumentBadge } from "@/components/InstrumentBadge";
-import { PortfolioHealthBreakdown } from "@/components/PortfolioHealthBreakdown";
+import {
+  PortfolioPrivacyToggle,
+  PrivateValue,
+} from "@/components/PrivateValue";
+import { InvestmentLogo } from "@/components/InvestmentLogo";
 import { normalizeMarketTicker } from "@/lib/market/tickerUniverse";
 import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
 import {
@@ -41,35 +42,27 @@ import {
   loadCloudPortfolio,
   saveCloudPortfolio,
 } from "@/lib/supabase/sync";
-import {
-  normalizeSafeTicker,
-  validatePositiveNumber,
-  validateTicker,
-} from "@/lib/validation";
+import { normalizeSafeTicker, validateTicker } from "@/lib/validation";
+import { ActionSheet } from "@/components/ActionSheet";
+import { Button, ButtonLink } from "@/components/ui";
 
-type PortfolioForm = Omit<PortfolioItem, "id">;
+type ManagedHolding = {
+  holding: HoldingView;
+  statusLabel: string;
+} | null;
 
 export function PortfolioTable() {
   const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
-  const [riskTolerance, setRiskTolerance] = useState(15);
-  const [form, setForm] = useState<PortfolioForm>(() =>
-    createEmptyPortfolioForm(),
-  );
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
-  const [hasStoredPortfolio, setHasStoredPortfolio] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState("");
   const [refreshError, setRefreshError] = useState("");
-  const [formSubmitError, setFormSubmitError] = useState("");
-  const [isLookingUpFormPrice, setIsLookingUpFormPrice] = useState(false);
-  const [formLookupMessage, setFormLookupMessage] = useState("");
-  const [formLookupError, setFormLookupError] = useState("");
-  const [syncMessage, setSyncMessage] = useState("Memuat mode penyimpanan...");
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("Menyiapkan data...");
+  const [managedHolding, setManagedHolding] = useState<ManagedHolding>(null);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -94,21 +87,11 @@ export function PortfolioTable() {
               nonNegativeNumber(settings.aprMoneyMarketFund),
             );
         }
-        if (
-          settings &&
-          typeof settings.riskTolerance === "number" &&
-          Number.isFinite(settings.riskTolerance)
-        ) {
-          if (isMounted)
-            setRiskTolerance(nonNegativeNumber(settings.riskTolerance));
-        }
-
         if (!user) {
           if (!isMounted) return;
           setItems(storedItems ?? []);
           setAlertRules(storedAlertRules);
-          setHasStoredPortfolio(storedItems !== null);
-          setSyncMessage("Login untuk sinkronisasi antar perangkat.");
+          setSyncMessage("Data tersimpan di perangkat ini.");
           setIsHydrated(true);
           return;
         }
@@ -125,22 +108,20 @@ export function PortfolioTable() {
           setAlertRules(
             cloudAlertRules.length > 0 ? cloudAlertRules : storedAlertRules,
           );
-          setHasStoredPortfolio(true);
           localArahDanaStorage.writePortfolio(nextItems);
           setSyncMessage(
             cloudItems.length > 0
-              ? "Cloud sync enabled. Holding dimuat dari Supabase dan dicadangkan lokal."
-              : "Cloud sync enabled. Belum ada holding cloud; data lokal akan dicadangkan saat berubah.",
+              ? "Data aman dan siap dipakai."
+              : "Portofolio siap. Data baru akan dijaga otomatis.",
           );
         } catch (error) {
           if (!isMounted) return;
           setItems(storedItems ?? []);
           setAlertRules(storedAlertRules);
-          setHasStoredPortfolio(storedItems !== null);
           setSyncMessage(
             error instanceof Error
-              ? `Cloud sync gagal, memakai localStorage. ${error.message}`
-              : "Cloud sync gagal, memakai localStorage.",
+              ? `Data tetap aman di perangkat ini. ${error.message}`
+              : "Data tetap aman di perangkat ini.",
           );
         } finally {
           if (isMounted) setIsHydrated(true);
@@ -159,16 +140,70 @@ export function PortfolioTable() {
 
     void saveCloudPortfolio(user, items)
       .then(() => {
-        setSyncMessage("Cloud sync enabled. Portofolio tersimpan.");
+        setSyncMessage("Portofolio siap.");
       })
       .catch((error) => {
         setSyncMessage(
           error instanceof Error
-            ? `Local backup tersimpan, cloud sync gagal. ${error.message}`
-            : "Local backup tersimpan, cloud sync gagal.",
+            ? `Data tersimpan di perangkat ini. ${error.message}`
+            : "Data tersimpan di perangkat ini.",
         );
       });
   }, [isHydrated, items, user]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    function handleAutoRefreshStart() {
+      setIsAutoRefreshing(true);
+      setRefreshError("");
+    }
+
+    function handleAutoRefreshDone(event: Event) {
+      setIsAutoRefreshing(false);
+      const latestItems = localArahDanaStorage.readPortfolio();
+      if (latestItems) {
+        setItems(normalizePortfolioItems(latestItems));
+      }
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      const updatedCount =
+        detail && typeof detail.updatedCount === "number"
+          ? detail.updatedCount
+          : 0;
+      const failedCount =
+        detail && typeof detail.failedCount === "number"
+          ? detail.failedCount
+          : 0;
+      if (updatedCount > 0) {
+        setRefreshMessage(
+          `Harga diperbarui otomatis. Update terakhir ${formatDateTime(new Date().toISOString())}.`,
+        );
+      } else if (failedCount > 0) {
+        setRefreshError(
+          "Harga belum bisa diperbarui otomatis. Data tersimpan tetap dipakai.",
+        );
+      }
+    }
+
+    window.addEventListener(
+      "arahdana:portfolio-prices-refreshing",
+      handleAutoRefreshStart,
+    );
+    window.addEventListener(
+      "arahdana:portfolio-prices-updated",
+      handleAutoRefreshDone,
+    );
+    return () => {
+      window.removeEventListener(
+        "arahdana:portfolio-prices-refreshing",
+        handleAutoRefreshStart,
+      );
+      window.removeEventListener(
+        "arahdana:portfolio-prices-updated",
+        handleAutoRefreshDone,
+      );
+    };
+  }, [isHydrated]);
 
   const totals = useMemo(() => {
     const summary = items.reduce(
@@ -236,7 +271,6 @@ export function PortfolioTable() {
         : null,
     };
   }, [aprMoneyMarketFund, items]);
-
   if (!isHydrated) {
     return (
       <LoadingState
@@ -246,77 +280,8 @@ export function PortfolioTable() {
     );
   }
 
-  function submitItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setFormSubmitError("");
-
-    const currentPrice =
-      form.currentPrice > 0 ? form.currentPrice : form.buyPrice;
-
-    const validationErrors = [
-      !form.name.trim() ? "Nama instrumen wajib diisi." : "",
-      validateTicker(form.ticker ?? "", { optional: true }),
-      validatePositiveNumber(form.buyPrice, "Harga beli"),
-      validatePositiveNumber(form.quantity, "Jumlah/unit"),
-      validatePositiveNumber(currentPrice, "Harga kini"),
-    ].filter(Boolean);
-
-    if (validationErrors.length > 0) {
-      setFormSubmitError(validationErrors.join(" "));
-      return;
-    }
-
-    const normalized = normalizePortfolioItem({
-      ...form,
-      currentPrice,
-      dataSource: form.dataSource ?? "manual_input",
-      lastPriceUpdatedAt: form.lastPriceUpdatedAt,
-      id: editingId ?? crypto.randomUUID(),
-    });
-
-    setHasStoredPortfolio(true);
-    setItems((current) =>
-      editingId
-        ? current.map((item) => (item.id === editingId ? normalized : item))
-        : [
-            normalized,
-            ...getWritablePortfolioBase(current, hasStoredPortfolio),
-          ],
-    );
-    setEditingId(null);
-    setForm(createEmptyPortfolioForm());
-    setIsFormOpen(false);
-  }
-
-  function startEditing(item: PortfolioItem) {
-    setIsFormOpen(true);
-    setEditingId(item.id);
-    setForm({
-      name: item.name,
-      type: item.type,
-      ticker: item.ticker ?? "",
-      buyPrice: item.buyPrice,
-      quantity: item.quantity,
-      currentPrice: item.currentPrice,
-      buyDate: item.buyDate,
-      notes: item.notes ?? "",
-      riskCategory: item.riskCategory,
-      dataSource: item.dataSource,
-      lastPriceUpdatedAt: item.lastPriceUpdatedAt,
-    });
-  }
-
-  function cancelEditing() {
-    setEditingId(null);
-    setForm(createEmptyPortfolioForm());
-  }
-
   function deleteItem(id: string) {
-    setHasStoredPortfolio(true);
     setItems((current) => current.filter((item) => item.id !== id));
-    if (editingId === id) {
-      cancelEditing();
-    }
   }
 
   async function refreshPrices() {
@@ -382,7 +347,6 @@ export function PortfolioTable() {
       });
 
       if (updates.size > 0) {
-        setHasStoredPortfolio(true);
         setItems((current) =>
           current.map((item) => {
             const update = updates.get(item.id);
@@ -412,63 +376,9 @@ export function PortfolioTable() {
     }
   }
 
-  async function lookupFormLatestPrice() {
-    const ticker = form.ticker?.trim();
-    setFormLookupMessage("");
-    setFormLookupError("");
-
-    if (!ticker) {
-      setFormLookupError(
-        "Tambahkan ticker dulu, misalnya BBCA.JK atau BBRI.JK.",
-      );
-      return;
-    }
-
-    const tickerValidation = validateTicker(ticker);
-    if (tickerValidation) {
-      setFormLookupError(tickerValidation);
-      return;
-    }
-
-    setIsLookingUpFormPrice(true);
-
-    try {
-      const normalizedTicker = normalizeLookupTicker(ticker);
-      const marketData = await fetchPublicMarketData({
-        ticker: normalizedTicker,
-        range: "1mo",
-        interval: "1d",
-      });
-      const latestClose = getLatestClose(marketData.prices);
-      if (!latestClose) {
-        throw new Error("Harga penutupan terbaru tidak tersedia.");
-      }
-
-      setForm((current) => ({
-        ...current,
-        name: current.name || marketData.ticker,
-        ticker: normalizeSafeTicker(marketData.ticker),
-        currentPrice: latestClose,
-        dataSource: "live_public_market_data",
-        lastPriceUpdatedAt: new Date().toISOString(),
-      }));
-      setFormLookupMessage(
-        `Harga publik terbaru untuk ${marketData.ticker} berhasil dimuat.`,
-      );
-    } catch (error) {
-      setFormLookupError(
-        error instanceof Error
-          ? error.message
-          : "Gagal mengambil harga publik terbaru.",
-      );
-    } finally {
-      setIsLookingUpFormPrice(false);
-    }
-  }
-
   return (
-    <div className="space-y-5">
-      <section className="overflow-hidden rounded-[1.65rem] bg-[linear-gradient(145deg,#03140f_0%,#064e3b_56%,#0f172a_100%)] p-5 text-white shadow-[0_18px_46px_rgba(6,78,59,0.16)] ring-1 ring-white/10 sm:p-7">
+    <div className="section-stack">
+      <section className="premium-gradient-surface overflow-hidden rounded-[1.55rem] p-5 text-white ring-1 ring-white/10 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -479,46 +389,34 @@ export function PortfolioTable() {
                     : "bg-amber-300/15 text-amber-100 ring-amber-200/20"
                 }`}
               >
-                {user ? "Cloud sync" : isConfigured ? "Local" : "Local"}
+                {user ? "Data aman" : isConfigured ? "Aman" : "Aman"}
               </span>
               <span className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/70 ring-1 ring-white/10">
-                Private
+                {isAutoRefreshing ? "Auto refresh..." : "Harga otomatis"}
               </span>
             </div>
             <p className="mt-6 text-sm font-medium text-white/58">
               Total portofolio
             </p>
-            <h2 className="mt-2 text-3xl font-bold leading-tight tracking-tight sm:text-5xl">
-              {formatRupiah(totals.current)}
-            </h2>
+            <div className="mt-2 flex min-w-0 items-center gap-2">
+              <h2 className="min-w-0 break-words text-3xl font-bold leading-tight tracking-tight sm:text-5xl">
+                <PrivateValue>{formatRupiah(totals.current)}</PrivateValue>
+              </h2>
+              <PortfolioPrivacyToggle className="bg-white/12" />
+            </div>
           </div>
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[1rem] bg-white/10 text-white/75 ring-1 ring-white/10 sm:h-11 sm:w-11">
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-            >
-              <rect x="6" y="10" width="12" height="9" rx="2" />
-              <path d="M9 10V7a3 3 0 0 1 6 0v3" />
-            </svg>
-          </span>
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <PortfolioHeroMetric
             label="Total P/L"
-            value={formatRupiah(totals.profit)}
+            value={<PrivateValue>{formatRupiah(totals.profit)}</PrivateValue>}
             helper={formatPercent(totals.profitPercent)}
             tone={totals.profit >= 0 ? "good" : "bad"}
           />
           <PortfolioHeroMetric
             label="Modal"
-            value={formatRupiah(totals.invested)}
-            helper={`${items.length} holding`}
+            value={<PrivateValue>{formatRupiah(totals.invested)}</PrivateValue>}
+            helper="Nilai masuk"
           />
           <PortfolioHeroMetric
             label="Profil risiko"
@@ -526,30 +424,41 @@ export function PortfolioTable() {
             helper={syncMessage}
           />
         </div>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => {
-              setEditingId(null);
-              setForm(createEmptyPortfolioForm());
-              setIsFormOpen((current) => !current);
-            }}
-            className="min-h-11 rounded-[1rem] bg-emerald-400 px-5 text-sm font-semibold text-stone-950 shadow-sm hover:bg-emerald-300 sm:min-w-32"
-          >
-            {isFormOpen && !editingId ? "Tutup form" : "Tambah"}
-          </button>
-          <button
-            type="button"
-            onClick={refreshPrices}
-            disabled={isRefreshing || items.length === 0}
-            className="min-h-11 rounded-[1rem] bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/12 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-40"
-          >
-            {isRefreshing ? "Memperbarui..." : "Perbarui Harga"}
-          </button>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <ButtonLink
+              href="/porto/add"
+              variant="primary"
+              className="flex-1 sm:min-w-32 sm:flex-none"
+            >
+              Tambah
+            </ButtonLink>
+            <Button
+              type="button"
+              variant="icon"
+              onClick={refreshPrices}
+              disabled={isRefreshing || items.length === 0}
+              className="bg-white/10 text-white/78 ring-white/12 hover:bg-white/15"
+              aria-label="Cek harga"
+              title="Cek harga"
+            >
+              <ReloadIcon className={isRefreshing ? "animate-spin" : ""} />
+            </Button>
+          </div>
+          <p className="text-xs font-medium leading-5 text-white/54 sm:max-w-sm">
+            Harga diperbarui otomatis di latar belakang saat data mulai usang.
+          </p>
         </div>
       </section>
 
-      <AllocationChips allocation={totals.allocation} />
+      <AllocationChips
+        allocation={totals.allocation}
+        groups={totals.groupedHoldings}
+        alertRules={alertRules}
+        onManage={(holding, statusLabel) =>
+          setManagedHolding({ holding, statusLabel })
+        }
+      />
 
       {refreshMessage ? (
         <StatusStrip tone="success">{refreshMessage}</StatusStrip>
@@ -558,250 +467,55 @@ export function PortfolioTable() {
         <StatusStrip tone="error">{refreshError}</StatusStrip>
       ) : null}
 
-      {isFormOpen ? (
-        <form
-          onSubmit={submitItem}
-          className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-stone-950">
-              {editingId ? "Edit holding" : "Tambah holding"}
-            </h2>
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
-              Manual
-            </span>
-          </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <Field label="Nama instrumen">
-              <input
-                className="input"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </Field>
-            <Field label="Jenis">
-              <select
-                className="input"
-                value={form.type}
-                onChange={(e) =>
-                  setForm({ ...form, type: e.target.value as InvestmentType })
-                }
-              >
-                <InstrumentOptions />
-              </select>
-            </Field>
-            <Field label="Ticker / simbol">
-              <input
-                className="input"
-                value={form.ticker}
-                onChange={(e) => setForm({ ...form, ticker: e.target.value })}
-                placeholder="BBCA.JK"
-              />
-            </Field>
-            <Field label="Harga beli">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                value={form.buyPrice || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    buyPrice: nonNegativeNumber(Number(e.target.value)),
-                  })
-                }
-              />
-            </Field>
-            <Field label="Jumlah / unit">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                value={form.quantity || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    quantity: nonNegativeNumber(Number(e.target.value)),
-                  })
-                }
-              />
-            </Field>
-            <Field label="Harga kini">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                value={form.currentPrice || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    currentPrice: nonNegativeNumber(Number(e.target.value)),
-                  })
-                }
-              />
-            </Field>
-            <Field label="Tanggal beli">
-              <input
-                className="input"
-                type="date"
-                value={form.buyDate}
-                onChange={(e) => setForm({ ...form, buyDate: e.target.value })}
-              />
-            </Field>
-            <Field label="Kategori risiko">
-              <select
-                className="input"
-                value={form.riskCategory}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    riskCategory: e.target.value as RiskCategory,
-                  })
-                }
-              >
-                <option value="low">Rendah</option>
-                <option value="medium">Sedang</option>
-                <option value="high">Tinggi</option>
-              </select>
-            </Field>
-            <Field label="Catatan">
-              <input
-                className="input"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              />
-            </Field>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button className="rounded-[1rem] bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800">
-              {editingId ? "Simpan perubahan" : "Tambah instrumen"}
-            </button>
-            <button
-              type="button"
-              onClick={lookupFormLatestPrice}
-              disabled={isLookingUpFormPrice || !form.ticker?.trim()}
-              className="rounded-[1rem] border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isLookingUpFormPrice ? "Mencari..." : "Isi harga terbaru"}
-            </button>
-            {editingId ? (
-              <button
-                type="button"
-                onClick={cancelEditing}
-                className="rounded-[1rem] border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100"
-              >
-                Batal edit
-              </button>
-            ) : null}
-          </div>
-          {formLookupMessage ? (
-            <p className="mt-3 text-sm font-medium text-emerald-700">
-              {formLookupMessage}
-            </p>
-          ) : null}
-          {formLookupError ? (
-            <p className="mt-3 text-sm font-medium text-rose-700">
-              {formLookupError}
-            </p>
-          ) : null}
-          {formSubmitError ? (
-            <p className="mt-3 text-sm font-medium text-rose-700">
-              {formSubmitError}
-            </p>
-          ) : null}
-        </form>
-      ) : null}
-
-      <section className="rounded-[1.6rem] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex items-center justify-between gap-3">
+      <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-stone-950">Holdings</h2>
-            <p className="mt-1 text-sm text-stone-500">
-              Dikelompokkan agar mudah dipindai.
+            <h2 className="text-lg font-semibold text-stone-950">
+              Performa detail
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Ringkasan performa dibuat tetap ringan agar halaman Porto fokus
+              untuk memantau kepemilikan.
             </p>
           </div>
-          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">
-            {items.length} produk
-          </span>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <ButtonLink href="/porto/manage" variant="secondary">
+              Manage
+            </ButtonLink>
+          </div>
         </div>
-
-        {items.length === 0 ? (
-          <div className="mt-4 rounded-[1.2rem] border border-dashed border-stone-300 p-6 text-center">
-            <h3 className="font-semibold text-stone-950">
-              Portofolio masih kosong
-            </h3>
-            <button
-              type="button"
-              onClick={() => setIsFormOpen(true)}
-              className="mt-4 rounded-[1rem] bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm"
-            >
-              Tambah holding pertama
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-4">
-            {totals.groupedHoldings.map((group) => (
-              <HoldingGroupCard
-                key={group.key}
-                group={group}
-                alertRules={alertRules}
-                onEdit={startEditing}
-                onDelete={deleteItem}
-              />
-            ))}
-          </div>
-        )}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <PerformerSummary
+            title="Top gainer"
+            performer={totals.topGainer}
+            tone="good"
+          />
+          <PerformerSummary
+            title="Worst performer"
+            performer={totals.worstPerformer}
+            tone="bad"
+          />
+        </div>
       </section>
-
-      {items.length > 0 ? (
-        <div className="mt-6">
-          <PortfolioHealthBreakdown
-            portfolio={items}
-            riskTolerance={riskTolerance}
-            aprMoneyMarketFund={aprMoneyMarketFund}
-          />
-        </div>
+      {managedHolding ? (
+        <HoldingManagementSheet
+          holding={managedHolding.holding}
+          statusLabel={managedHolding.statusLabel}
+          onClose={() => setManagedHolding(null)}
+          onEdit={() => {
+            const item = managedHolding.holding.item;
+            setManagedHolding(null);
+            window.location.assign(
+              `/porto/edit?id=${encodeURIComponent(item.id)}`,
+            );
+          }}
+          onDelete={() => {
+            const id = managedHolding.holding.item.id;
+            setManagedHolding(null);
+            deleteItem(id);
+          }}
+        />
       ) : null}
-
-      <details className="rounded-[1.6rem] border border-stone-200 bg-white p-5 shadow-sm">
-        <summary className="cursor-pointer text-sm font-semibold text-stone-950">
-          Import CSV dan performa detail
-        </summary>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_0.8fr]">
-          <CsvPortfolioImportSection
-            existingItems={items}
-            hasStoredPortfolio={hasStoredPortfolio}
-            onImport={async (nextItems) => {
-              localArahDanaStorage.writePortfolio(nextItems);
-              if (user) {
-                await saveCloudPortfolio(user, nextItems);
-              }
-              setHasStoredPortfolio(true);
-              setItems(nextItems);
-            }}
-            storageLabel={user ? "Supabase dan localStorage" : "localStorage"}
-            title="CSV Import"
-            description="Upload CSV lokal atau tempel data. File dibaca di browser."
-          />
-          <section className="rounded-[1.4rem] bg-stone-100 p-4">
-            <h2 className="text-sm font-semibold text-stone-950">
-              Pemenang dan pemberat
-            </h2>
-            <div className="mt-3 grid gap-3">
-              <PerformerSummary
-                title="Top gainer"
-                performer={totals.topGainer}
-                tone="good"
-              />
-              <PerformerSummary
-                title="Worst performer"
-                performer={totals.worstPerformer}
-                tone="bad"
-              />
-            </div>
-          </section>
-        </div>
-      </details>
     </div>
   );
 }
@@ -820,41 +534,33 @@ export function InstrumentOptions() {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="grid gap-1 text-sm font-medium text-stone-700">
-      {label}
-      {children}
-    </label>
-  );
-}
+function holdingHealthStatus(holding: HoldingView, rules: AlertRule[]) {
+  if (
+    rules.some(
+      (rule) =>
+        rule.lastCheckStatus === "triggered" ||
+        rule.lastCheckStatus === "error",
+    ) ||
+    holding.profitPercent <= -10 ||
+    holding.item.riskCategory === "high"
+  ) {
+    return {
+      label: "Perlu perhatian",
+      className: "bg-amber-50 text-amber-800 ring-amber-200",
+    };
+  }
 
-function AlertMeta({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-stone-950">{value}</p>
-    </div>
-  );
-}
+  if (rules.some((rule) => rule.enabled) || holding.isEstimated) {
+    return {
+      label: "Dipantau",
+      className: "bg-emerald-50 text-emerald-800 ring-emerald-100",
+    };
+  }
 
-function portfolioAlertStatus(rules: AlertRule[]) {
-  if (rules.length === 0) return "No alert";
-  if (rules.some((rule) => rule.lastCheckStatus === "triggered"))
-    return "Triggered";
-  if (rules.some((rule) => rule.lastCheckStatus === "error"))
-    return "Needs check";
-  if (rules.some((rule) => rule.enabled)) return "Active";
-  return "Inactive";
-}
-
-function latestAlertCheckedAt(rules: AlertRule[]) {
-  return rules
-    .map((rule) => rule.lastCheckedAt)
-    .filter((value): value is string => Boolean(value))
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+  return {
+    label: "Aman",
+    className: "bg-stone-100 text-stone-600 ring-stone-200",
+  };
 }
 
 type HoldingView = {
@@ -883,8 +589,8 @@ function PortfolioHeroMetric({
   tone = "neutral",
 }: {
   label: string;
-  value: string;
-  helper?: string;
+  value: ReactNode;
+  helper?: ReactNode;
   tone?: "neutral" | "good" | "bad";
 }) {
   const valueClass =
@@ -895,7 +601,7 @@ function PortfolioHeroMetric({
         : "text-white";
 
   return (
-    <div className="rounded-[1.25rem] bg-white/8 p-4 ring-1 ring-white/10">
+    <div className="rounded-[1.15rem] bg-white/8 p-4 ring-1 ring-white/10">
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
         {label}
       </p>
@@ -913,6 +619,9 @@ function PortfolioHeroMetric({
 
 function AllocationChips({
   allocation,
+  groups,
+  alertRules,
+  onManage,
 }: {
   allocation: Array<{
     key: string;
@@ -920,7 +629,11 @@ function AllocationChips({
     value: number;
     percent: number;
   }>;
+  groups: HoldingGroup[];
+  alertRules: AlertRule[];
+  onManage: (holding: HoldingView, statusLabel: string) => void;
 }) {
+  const [openType, setOpenType] = useState<InvestmentType | null>(null);
   const visibleTypes: InvestmentType[] = [
     "money_market_fund",
     "bond_fund",
@@ -929,194 +642,264 @@ function AllocationChips({
     "cash_savings",
   ];
   const byType = new Map(allocation.map((item) => [item.key, item]));
+  const holdings = groups.flatMap((group) => group.items);
+  const openHoldings = openType
+    ? holdings.filter((holding) =>
+        segmentTypes(openType).includes(holding.item.type),
+      )
+    : [];
 
   return (
-    <section className="rounded-[1.45rem] border border-stone-200 bg-white p-4 shadow-sm">
+    <section className="rounded-[1.5rem] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
         {visibleTypes.map((type) => {
           const item = byType.get(type);
+          const isOpen = openType === type;
           return (
-            <div
+            <button
+              type="button"
               key={type}
-              className="min-w-fit rounded-full bg-stone-100 px-4 py-2 ring-1 ring-stone-200"
+              aria-expanded={isOpen}
+              onClick={() =>
+                setOpenType((current) => (current === type ? null : type))
+              }
+              className={`inline-flex min-h-[3.9rem] w-[4.9rem] shrink-0 flex-col items-center justify-center gap-1 rounded-[1.15rem] px-2 py-2 text-center ring-1 transition-colors sm:min-h-10 sm:w-auto sm:min-w-fit sm:flex-row sm:gap-2 sm:px-3.5 ${
+                isOpen
+                  ? "bg-stone-950 text-white ring-stone-800"
+                  : "bg-stone-50 text-stone-950 ring-stone-200 hover:bg-stone-100"
+              }`}
             >
-              <span className="text-xs font-semibold text-stone-500">
+              <span
+                className={`max-w-full break-words text-[0.68rem] font-semibold leading-tight sm:text-xs ${
+                  isOpen ? "text-white/68" : "text-stone-500"
+                }`}
+              >
                 {shortAllocationLabel(type)}
               </span>
-              <span className="ml-2 text-sm font-semibold text-stone-950">
+              <span className="text-sm font-semibold leading-none sm:leading-normal">
                 {item?.percent ?? 0}%
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
+
+      {openType ? (
+        <div className="mt-4 grid gap-2.5 border-t border-stone-100 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                Segmen
+              </p>
+              <h3 className="mt-1 font-semibold text-stone-950">
+                {shortAllocationLabel(openType)}
+              </h3>
+            </div>
+            <span className="inline-flex min-h-7 items-center rounded-full bg-stone-100 px-3 text-xs font-semibold text-stone-600 ring-1 ring-stone-200/80">
+              {openHoldings.length} produk
+            </span>
+          </div>
+          {openHoldings.length > 0 ? (
+            openHoldings.map((holding) => (
+              <HoldingRow
+                key={holding.item.id}
+                holding={holding}
+                alertRules={alertRules.filter(
+                  (rule) =>
+                    rule.sourceType === "portfolio" &&
+                    rule.sourceId === holding.item.id,
+                )}
+                onManage={onManage}
+              />
+            ))
+          ) : (
+            <p className="rounded-[1rem] bg-stone-50 p-4 text-sm font-medium text-stone-500 ring-1 ring-stone-200/80">
+              Belum ada holding di segmen ini.
+            </p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
 
-const HoldingGroupCard = memo(function HoldingGroupCard({
-  group,
-  alertRules,
-  onEdit,
-  onDelete,
-}: {
-  group: HoldingGroup;
-  alertRules: AlertRule[];
-  onEdit: (item: PortfolioItem) => void;
-  onDelete: (id: string) => void;
-}) {
-  const toneClass = group.profit >= 0 ? "text-emerald-700" : "text-rose-700";
-
-  return (
-    <article className="rounded-[1.35rem] bg-stone-100/80 p-3 sm:p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-stone-950">{group.title}</h3>
-          <p className="mt-1 text-xs font-medium text-stone-500">
-            {group.items.length} produk
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="font-semibold text-stone-950">
-            {formatRupiah(group.value)}
-          </p>
-          <p className={`text-xs font-semibold ${toneClass}`}>
-            {formatRupiah(group.profit)} ({formatPercent(group.profitPercent)})
-          </p>
-        </div>
-      </div>
-      <div className="mt-3 grid gap-2">
-        {group.items.map((holding) => (
-          <HoldingRow
-            key={holding.item.id}
-            holding={holding}
-            alertRules={alertRules.filter(
-              (rule) =>
-                rule.sourceType === "portfolio" &&
-                rule.sourceId === holding.item.id,
-            )}
-            onEdit={onEdit}
-            onDelete={onDelete}
-          />
-        ))}
-      </div>
-    </article>
-  );
-});
+function segmentTypes(type: InvestmentType): InvestmentType[] {
+  if (type === "money_market_fund") return ["money_market_fund"];
+  if (type === "cash_savings") return ["cash_savings"];
+  if (type === "bond_fund") return ["bond_fund", "bond"];
+  return [type];
+}
 
 const HoldingRow = memo(function HoldingRow({
   holding,
   alertRules,
-  onEdit,
-  onDelete,
+  onManage,
 }: {
   holding: HoldingView;
   alertRules: AlertRule[];
-  onEdit: (item: PortfolioItem) => void;
-  onDelete: (id: string) => void;
+  onManage: (holding: HoldingView, statusLabel: string) => void;
 }) {
   const profitClass =
     holding.profit >= 0 ? "text-emerald-700" : "text-rose-700";
-  const latestCheckedAt = latestAlertCheckedAt(alertRules);
+  const status = holdingHealthStatus(holding, alertRules);
+  const longPressTimerRef = useRef<number | null>(null);
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function startLongPress() {
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      onManage(holding, status.label);
+      longPressTimerRef.current = null;
+    }, 520);
+  }
+
+  useEffect(() => clearLongPressTimer, []);
 
   return (
-    <div className="rounded-[1.15rem] bg-white/86 p-3 ring-1 ring-stone-200/70">
+    <div
+      className="min-w-0 touch-manipulation rounded-[1.15rem] bg-white p-3.5 ring-1 ring-stone-200/80 transition-all hover:shadow-md sm:p-4"
+      onPointerDown={startLongPress}
+      onPointerLeave={clearLongPressTimer}
+      onPointerCancel={clearLongPressTimer}
+      onPointerUp={clearLongPressTimer}
+    >
       <div className="flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-50 text-sm font-bold text-emerald-800 ring-1 ring-emerald-100">
-          {initials(holding.item.name)}
-        </div>
+        <InvestmentLogo
+          name={holding.item.name}
+          ticker={holding.item.ticker}
+          className="h-11 w-11"
+          fallbackInitials={initials(holding.item.name)}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="truncate font-semibold text-stone-950">
+              <p className="break-words font-semibold text-stone-950">
                 {holding.item.name}
               </p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <InstrumentBadge type={holding.item.type} />
-                <RiskBadge risk={holding.item.riskCategory} />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <InstrumentBadge type={holding.item.type} compact />
                 {holding.item.ticker ? (
-                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[0.68rem] font-bold text-stone-500">
+                  <span className="inline-flex min-h-7 items-center rounded-full bg-stone-100 px-2.5 text-[0.68rem] font-bold leading-none text-stone-500 ring-1 ring-stone-200/70">
                     {holding.item.ticker}
                   </span>
                 ) : null}
               </div>
             </div>
-            <div className="text-left sm:text-right">
-              <p className="font-semibold text-stone-950">
-                {formatRupiah(holding.current)}
+            <div className="min-w-0 text-left sm:text-right">
+              <p className="break-words font-semibold text-stone-950">
+                <PrivateValue>{formatRupiah(holding.current)}</PrivateValue>
               </p>
-              <p className={`text-sm font-semibold ${profitClass}`}>
-                {formatRupiah(holding.profit)} (
+              <p
+                className={`mt-1 break-words text-sm font-semibold ${profitClass}`}
+              >
+                <PrivateValue>{formatRupiah(holding.profit)}</PrivateValue> (
                 {formatPercent(holding.profitPercent)})
               </p>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200 pt-3">
-            <p className="text-xs font-medium text-stone-500">
-              Harga {formatRupiah(holding.currentPriceUsed)}
-              {holding.isEstimated ? " - estimasi" : ""}
-              {holding.item.lastPriceUpdatedAt
-                ? ` - ${formatDateTime(holding.item.lastPriceUpdatedAt)}`
-                : ""}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=portfolio_loss`}
-                className="min-h-9 rounded-full border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
-              >
-                Loss alert
-              </Link>
-              <Link
-                href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=concentration_risk`}
-                className="min-h-9 rounded-full border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-              >
-                Allocation alert
-              </Link>
-              <Link
-                href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=risk_score_worsens`}
-                className="min-h-9 rounded-full border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-              >
-                Risk alert
-              </Link>
-              <button
-                type="button"
-                onClick={() => onEdit(holding.item)}
-                className="min-h-9 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => onDelete(holding.item.id)}
-                className="min-h-9 rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-              >
-                Hapus
-              </button>
-            </div>
-          </div>
-          <div className="mt-3 grid gap-2 rounded-lg bg-stone-100 p-3 sm:grid-cols-3">
-            <AlertMeta
-              label="Alert status"
-              value={portfolioAlertStatus(alertRules)}
-            />
-            <AlertMeta
-              label="Active alerts"
-              value={String(alertRules.filter((rule) => rule.enabled).length)}
-            />
-            <AlertMeta
-              label="Last checked"
-              value={
-                latestCheckedAt
-                  ? formatDateTime(latestCheckedAt)
-                  : "Belum pernah"
-              }
-            />
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-stone-200/80 pt-3">
+            <span
+              className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-semibold leading-none ring-1 ${status.className}`}
+            >
+              {status.label}
+            </span>
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onManage(holding, status.label);
+              }}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-100 text-lg font-semibold leading-none text-stone-500 ring-1 ring-stone-200 hover:bg-white"
+              aria-label={`Kelola ${holding.item.name}`}
+            >
+              ...
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
 });
+
+function HoldingManagementSheet({
+  holding,
+  statusLabel,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  holding: HoldingView;
+  statusLabel: string;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const titleId = `holding-actions-${holding.item.id}`;
+
+  return (
+    <ActionSheet labelledBy={titleId} onClose={onClose}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p id={titleId} className="break-words text-lg font-semibold">
+            {holding.item.name}
+          </p>
+          <p className="mt-1 text-sm font-medium text-stone-500">
+            {statusLabel} |{" "}
+            <PrivateValue>{formatRupiah(holding.current)}</PrivateValue>
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="icon"
+          onClick={onClose}
+          className="h-9 w-9 bg-stone-100 text-xl leading-none text-stone-500"
+          aria-label="Tutup"
+        >
+          x
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        <ButtonLink
+          href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=portfolio_loss`}
+          variant="secondary"
+          className="justify-start"
+        >
+          Atur batas rugi
+        </ButtonLink>
+        <ButtonLink
+          href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=concentration_risk`}
+          variant="secondary"
+          className="justify-start"
+        >
+          Atur alokasi
+        </ButtonLink>
+        <ButtonLink
+          href={`/alerts?source=portfolio&id=${encodeURIComponent(holding.item.id)}&type=risk_score_worsens`}
+          variant="secondary"
+          className="justify-start"
+        >
+          Atur risiko
+        </ButtonLink>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Button type="button" variant="secondary" onClick={onEdit}>
+            Edit
+          </Button>
+          <Button type="button" variant="danger" onClick={onDelete}>
+            Hapus
+          </Button>
+        </div>
+      </div>
+    </ActionSheet>
+  );
+}
 
 function StatusStrip({
   tone,
@@ -1269,7 +1052,7 @@ function PerformerSummary({
             {performer.item.name}
           </p>
           <p className={`mt-1 text-sm font-semibold ${toneClass}`}>
-            {formatRupiah(performer.profit)} (
+            <PrivateValue>{formatRupiah(performer.profit)}</PrivateValue> (
             {formatPercent(performer.profitPercent)})
           </p>
           <p className="mt-1 text-xs text-stone-500">
@@ -1283,30 +1066,28 @@ function PerformerSummary({
   );
 }
 
-function getWritablePortfolioBase(
-  current: PortfolioItem[],
-  hasStoredPortfolio: boolean,
-) {
-  return hasStoredPortfolio ? current : [];
+function ReloadIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`h-5 w-5 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M21 12a9 9 0 0 1-15.5 6.2" />
+      <path d="M3 12A9 9 0 0 1 18.5 5.8" />
+      <path d="M18 2v4h4" />
+      <path d="M6 22v-4H2" />
+    </svg>
+  );
 }
 
 function normalizeLookupTicker(value: string) {
   return normalizeMarketTicker(normalizeSafeTicker(value));
-}
-
-function createEmptyPortfolioForm(): PortfolioForm {
-  return {
-    name: "",
-    type: "stock",
-    ticker: "",
-    buyPrice: 0,
-    quantity: 0,
-    currentPrice: 0,
-    buyDate: new Date().toISOString().slice(0, 10),
-    notes: "",
-    riskCategory: "medium",
-    dataSource: "manual_input",
-  };
 }
 
 function normalizePortfolioItem(item: PortfolioItem): PortfolioItem {
