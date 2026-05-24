@@ -26,7 +26,7 @@ const steps = ["Produk", "Instrumen", "Detail", "Konfirmasi"];
 type AddMode = "manual" | "import" | null;
 
 export default function PortoAddPage() {
-  const [mode, setMode] = useState<AddMode>(null);
+  const [mode, setMode] = useState<AddMode>(() => readPersistedAddMode());
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<HoldingDraft>(() => createHoldingDraft());
   const [importItems, setImportItems] = useState<PortfolioItem[]>(
@@ -50,6 +50,11 @@ export default function PortoAddPage() {
   function update(next: Partial<HoldingDraft>) {
     setDraft((current) => ({ ...current, ...next }));
     setError("");
+  }
+
+  function selectMode(nextMode: AddMode) {
+    setMode(nextMode);
+    persistAddMode(nextMode);
   }
 
   function goNext() {
@@ -106,6 +111,7 @@ export default function PortoAddPage() {
                   setDraft(createHoldingDraft());
                   setStep(0);
                   setSavedName("");
+                  selectMode("manual");
                 }}
               >
                 Tambah lagi
@@ -131,7 +137,7 @@ export default function PortoAddPage() {
         <FlowPanel className="grid gap-3">
           <button
             type="button"
-            onClick={() => setMode("manual")}
+            onClick={() => selectMode("manual")}
             className="min-h-24 rounded-[1.2rem] bg-white p-5 text-left ring-1 ring-emerald-100 transition hover:bg-emerald-50 hover:ring-emerald-200"
           >
             <span className="block text-base font-semibold text-stone-950">
@@ -144,7 +150,7 @@ export default function PortoAddPage() {
 
           <button
             type="button"
-            onClick={() => setMode("import")}
+            onClick={() => selectMode("import")}
             className="min-h-24 rounded-[1.2rem] bg-white p-5 text-left ring-1 ring-stone-200 transition hover:bg-stone-50 hover:ring-stone-300"
           >
             <span className="block text-base font-semibold text-stone-950">
@@ -173,7 +179,7 @@ export default function PortoAddPage() {
             variant="secondary"
             className="w-fit"
             onClick={() => {
-              setMode(null);
+              selectMode(null);
               setImportMessage("");
             }}
           >
@@ -211,7 +217,7 @@ export default function PortoAddPage() {
           variant="secondary"
           className="w-fit"
           onClick={() => {
-            setMode(null);
+            selectMode(null);
             setStep(0);
             setError("");
           }}
@@ -440,4 +446,21 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       </span>
     </div>
   );
+}
+
+const ADD_MODE_KEY = "arahdana.portoAdd.mode";
+
+function readPersistedAddMode(): AddMode {
+  if (typeof window === "undefined") return null;
+  const value = window.sessionStorage.getItem(ADD_MODE_KEY);
+  return value === "manual" || value === "import" ? value : null;
+}
+
+function persistAddMode(mode: AddMode) {
+  if (typeof window === "undefined") return;
+  if (mode) {
+    window.sessionStorage.setItem(ADD_MODE_KEY, mode);
+  } else {
+    window.sessionStorage.removeItem(ADD_MODE_KEY);
+  }
 }

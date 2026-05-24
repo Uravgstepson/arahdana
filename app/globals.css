@@ -94,10 +94,12 @@ body {
       rgba(237, 243, 247, 0.88) 48%,
       rgba(232, 238, 244, 1) 100%
     ),
-    url("/icons/Background%20For%20Desktop.png"),
-    var(--background);
+    url("/icons/Background%20For%20Desktop.png"), var(--background);
   background-attachment: fixed, fixed, scroll;
-  background-position: center top, center top, center;
+  background-position:
+    center top,
+    center top,
+    center;
   background-size: cover, cover, auto;
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -114,11 +116,7 @@ html {
 
 :root[data-theme="dark"] body {
   background:
-    linear-gradient(
-      180deg,
-      rgba(15, 23, 42, 1) 0%,
-      rgba(12, 20, 34, 1) 100%
-    ),
+    linear-gradient(180deg, rgba(15, 23, 42, 1) 0%, rgba(12, 20, 34, 1) 100%),
     var(--background);
   color: var(--foreground);
 }
@@ -145,10 +143,12 @@ body::before {
       rgba(238, 245, 242, 0.72) 48%,
       rgba(238, 245, 242, 0.92) 100%
     ),
-    url("/icons/Background%20For%20Desktop.png"),
-    #eef5f2;
+    url("/icons/Background%20For%20Desktop.png"), #eef5f2;
   background-attachment: fixed, fixed, scroll;
-  background-position: center top, center top, center;
+  background-position:
+    center top,
+    center top,
+    center;
   background-size: cover, cover, auto;
 }
 
@@ -332,7 +332,11 @@ thead {
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(3, 20, 15, 0.24), rgba(237, 243, 247, 0)),
-    radial-gradient(circle at 86% 0%, rgba(16, 185, 129, 0.13), transparent 27%),
+    radial-gradient(
+      circle at 86% 0%,
+      rgba(16, 185, 129, 0.13),
+      transparent 27%
+    ),
     radial-gradient(ellipse at 15% -8%, rgba(3, 20, 15, 0.24), transparent 34%),
     linear-gradient(
       180deg,
@@ -374,7 +378,11 @@ thead {
 .premium-gradient-surface::before {
   z-index: 0;
   background:
-    radial-gradient(circle at 82% 0%, rgba(52, 211, 153, 0.24), transparent 28%),
+    radial-gradient(
+      circle at 82% 0%,
+      rgba(52, 211, 153, 0.24),
+      transparent 28%
+    ),
     radial-gradient(ellipse at 8% 8%, rgba(1, 29, 22, 0.78), transparent 44%),
     linear-gradient(145deg, #03140f 0%, #064e3b 54%, #0f172a 100%);
 }
@@ -831,16 +839,22 @@ section,
         rgba(255, 255, 255, 0.94) 0%,
         rgba(237, 243, 247, 1) 100%
       ),
-      url("/icons/Background%20For%20Mobile.png"),
-      var(--background);
+      url("/icons/Background%20For%20Mobile.png"), var(--background);
     background-attachment: scroll, fixed, scroll;
-    background-position: center top, center top, center;
+    background-position:
+      center top,
+      center top,
+      center;
     background-size: cover, cover, auto;
   }
 
   body::before {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(237, 243, 247, 0.86)),
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.48),
+        rgba(237, 243, 247, 0.86)
+      ),
       rgba(255, 255, 255, 0.28);
     backdrop-filter: blur(12px) saturate(1.02);
     -webkit-backdrop-filter: blur(12px) saturate(1.02);
@@ -854,16 +868,22 @@ section,
         rgba(238, 245, 242, 0.76) 56%,
         rgba(238, 245, 242, 0.96) 100%
       ),
-      url("/icons/Background%20For%20Mobile.png"),
-      #eef5f2;
+      url("/icons/Background%20For%20Mobile.png"), #eef5f2;
     background-attachment: scroll, fixed, scroll;
-    background-position: center top, center top, center;
+    background-position:
+      center top,
+      center top,
+      center;
     background-size: cover, cover, auto;
   }
 
   .public-art-background::before {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(238, 245, 242, 0.58)),
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.18),
+        rgba(238, 245, 242, 0.58)
+      ),
       rgba(255, 255, 255, 0.1);
   }
 
@@ -877,6 +897,10 @@ section,
       linear-gradient(120deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.18));
     opacity: 0.9;
   }
+}
+
+.premium-gradient-surface {
+  rounded: 1.8rem;
 }
 
 @media (max-width: 380px) {

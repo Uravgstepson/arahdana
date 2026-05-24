@@ -125,7 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (auth.isConfigured && (auth.isLoading || !auth.user)) {
+  if (auth.isConfigured && !auth.user) {
     return (
       <div className="min-h-screen text-stone-950">
         <ToastViewport />
