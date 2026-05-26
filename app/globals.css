@@ -899,10 +899,6 @@ section,
   }
 }
 
-.premium-gradient-surface {
-  rounded: 1.8rem;
-}
-
 @media (max-width: 380px) {
   .app-header-title {
     font-size: 1.2rem;

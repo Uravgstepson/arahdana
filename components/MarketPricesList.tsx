@@ -8,6 +8,7 @@ import type {
 } from "@/lib/types/investment";
 import { fetchPublicMarketData } from "@/lib/providers/marketClient";
 import { formatPercent } from "@/lib/utils/format";
+import { InvestmentLogo } from "@/components/InvestmentLogo";
 import { PrivateValue } from "@/components/PrivateValue";
 import { analyzeInvestment } from "@/lib/analysis/analyzeInvestment";
 import {
@@ -170,16 +171,24 @@ function MarketCard({ market }: { market: MarketPrice }) {
   return (
     <article className="rounded-[1.35rem] border border-stone-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold text-stone-950">{market.name}</h3>
-            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold text-stone-600">
-              {market.ticker}
-            </span>
+        <div className="flex min-w-0 items-start gap-3">
+          <InvestmentLogo
+            name={market.name}
+            ticker={market.ticker}
+            className="h-11 w-11"
+            fallbackInitials={initials(market.name)}
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold text-stone-950">{market.name}</h3>
+              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold text-stone-600">
+                {market.ticker}
+              </span>
+            </div>
+            <p className="mt-1 text-xs font-semibold text-stone-500">
+              {market.live ? "Data pasar publik" : "Model NAV internal"}
+            </p>
           </div>
-          <p className="mt-1 text-xs font-semibold text-stone-500">
-            {market.live ? "Data pasar publik" : "Model NAV internal"}
-          </p>
         </div>
 
         {market.analysis ? (
@@ -392,4 +401,18 @@ function verdictColor(verdict?: string) {
 
 function round(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function initials(value: string) {
+  const words = value
+    .replace(/\.JK$/iu, "")
+    .split(/\s+/u)
+    .filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
 }

@@ -4,7 +4,7 @@ type BrandMarkVariant = "icon" | "full";
 type BrandMarkTone = "light" | "plain";
 
 const brandSources: Record<BrandMarkVariant, string> = {
-  icon: "/icons/arahdana-icon.svg",
+  icon: "/icons/Logo%20App.svg",
   full: "/icons/Logo_full_brand-removebg-preview.png",
 };
 

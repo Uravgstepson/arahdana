@@ -15,26 +15,20 @@
   "dir": "ltr",
   "icons": [
     {
-      "src": "/icons/arahdana-icon-192.png",
-      "sizes": "192x192",
+      "src": "/icons/Logo%20App.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Logo%20App.png",
+      "sizes": "2000x2000",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/arahdana-icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/arahdana-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icons/arahdana-maskable-512.png",
-      "sizes": "512x512",
+      "src": "/icons/Logo%20App.png",
+      "sizes": "2000x2000",
       "type": "image/png",
       "purpose": "any maskable"
     }
@@ -45,21 +39,21 @@
       "short_name": "Home",
       "description": "Buka dashboard ArahDana",
       "url": "/dashboard",
-      "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/Logo%20App.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "Analisis",
       "short_name": "Analisis",
       "description": "Buka analisis investasi",
       "url": "/analyzer",
-      "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/Logo%20App.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "Goals",
       "short_name": "Goals",
       "description": "Buka target investasi",
       "url": "/goals",
-      "icons": [{ "src": "/icons/arahdana-icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/Logo%20App.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ]
 }

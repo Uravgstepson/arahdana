@@ -2,6 +2,7 @@
 
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
+import { InvestmentLogo } from "@/components/InvestmentLogo";
 import type { WatchlistItem } from "@/lib/types/investment";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { cn } from "@/lib/utils/format";
@@ -16,27 +17,35 @@ const RECENT_MARKET_SEARCHES_KEY = "arahdana.market.recentSearches";
 
 const marketProductSegments = [
   {
+    eyebrow: "Dana kolektif",
     title: "Reksa Dana",
+    description: "Pasar uang, obligasi, campuran, dan saham untuk rencana bertahap.",
     href: "/market-prices?category=money_market_fund",
     tone: "emerald",
     icon: "sprout",
   },
   {
+    eyebrow: "Kupon negara",
     title: "SBN Retail",
+    description: "Instrumen negara ritel untuk alokasi defensif dan pendapatan tetap.",
     href: "/market-prices?category=sbn_retail",
-    tone: "rose",
+    tone: "gold",
     icon: "flag",
   },
   {
+    eyebrow: "Obligasi negara",
     title: "Obligasi FR",
+    description: "Pantau seri FR dan arah yield untuk konteks portofolio obligasi.",
     href: "/market-prices?category=fr_bond",
-    tone: "sky",
+    tone: "teal",
     icon: "bond",
   },
   {
+    eyebrow: "IDX market",
     title: "Saham",
+    description: "Saham Indonesia populer dengan pergerakan harga terbaru.",
     href: "/market-prices?category=idx_stock",
-    tone: "violet",
+    tone: "dark",
     icon: "candle",
   },
 ];
@@ -182,12 +191,20 @@ function SearchSuggestionList({
           onClick={() => onChoose(asset)}
           className="flex min-h-12 items-center justify-between gap-3 rounded-[0.95rem] px-3 text-left text-white transition-colors hover:bg-white/8"
         >
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">
-              {asset.name}
-            </span>
-            <span className="mt-0.5 block truncate text-xs font-medium text-white/45">
-              {asset.categoryLabel} | {asset.region}
+          <span className="flex min-w-0 items-center gap-3">
+            <InvestmentLogo
+              name={asset.name}
+              ticker={asset.ticker}
+              className="h-10 w-10 ring-white/10"
+              fallbackInitials={initials(asset.name)}
+            />
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">
+                {asset.name}
+              </span>
+              <span className="mt-0.5 block truncate text-xs font-medium text-white/45">
+                {asset.categoryLabel} | {asset.region}
+              </span>
             </span>
           </span>
           <span className={cn("shrink-0 text-xs font-bold", directionText(asset))}>
@@ -245,17 +262,25 @@ function SearchResult({
   return (
     <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight text-stone-950">
-              {asset.name}
-            </h2>
-            {asset.ticker ? <MarketTag>{asset.ticker}</MarketTag> : null}
+        <div className="flex min-w-0 items-start gap-3">
+          <InvestmentLogo
+            name={asset.name}
+            ticker={asset.ticker}
+            className="h-14 w-14 rounded-[1.1rem]"
+            fallbackInitials={initials(asset.name)}
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-2xl font-semibold tracking-tight text-stone-950">
+                {asset.name}
+              </h2>
+              {asset.ticker ? <MarketTag>{asset.ticker}</MarketTag> : null}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-stone-600">{asset.overview}</p>
+            <p className="mt-4 rounded-[1rem] bg-emerald-50 px-4 py-3 text-sm font-medium leading-6 text-emerald-900 ring-1 ring-emerald-100">
+              {asset.insight}
+            </p>
           </div>
-          <p className="mt-2 text-sm leading-6 text-stone-600">{asset.overview}</p>
-          <p className="mt-4 rounded-[1rem] bg-emerald-50 px-4 py-3 text-sm font-medium leading-6 text-emerald-900 ring-1 ring-emerald-100">
-            {asset.insight}
-          </p>
         </div>
         <div className="shrink-0 rounded-[1.25rem] bg-stone-50 p-4 ring-1 ring-stone-200 sm:min-w-44">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
@@ -287,18 +312,22 @@ function SearchResult({
 
 function PantauSection({ watchlist }: { watchlist: WatchlistItem[] }) {
   const fallback = [
-    { name: "BBCA", price: "Rp 9.400", target: "Rp 10.200", status: "Dipantau" },
-    { name: "IHSG", price: "6.950", target: "Arah pasar", status: "Aman" },
-    { name: "Bitcoin", price: "Rp 1.08 M", target: "Volatilitas", status: "Volatil" },
+    { name: "BBCA", ticker: "BBCA", price: "Rp 9.400", target: "Rp 10.200", status: "Dipantau" },
+    { name: "IHSG", ticker: "IHSG", price: "6.950", target: "Arah pasar", status: "Aman" },
+    { name: "Bitcoin", ticker: "BTC", price: "Rp 1.08 M", target: "Volatilitas", status: "Volatil" },
   ];
   const items =
     watchlist.length > 0
-      ? watchlist.slice(0, 4).map((item) => ({
-          name: item.name,
-          price: searchMarketAssets(item.name, 1)[0]?.value ?? "Manual",
-          target: item.targetBuyZone || "Target belum diisi",
-          status: watchlistStatusLabel(item.status),
-        }))
+      ? watchlist.slice(0, 4).map((item) => {
+          const asset = searchMarketAssets(item.name, 1)[0];
+          return {
+            name: item.name,
+            ticker: asset?.ticker,
+            price: asset?.value ?? "Manual",
+            target: item.targetBuyZone || "Target belum diisi",
+            status: watchlistStatusLabel(item.status),
+          };
+        })
       : fallback;
 
   return (
@@ -314,11 +343,19 @@ function PantauSection({ watchlist }: { watchlist: WatchlistItem[] }) {
             key={`${item.name}-${item.target}`}
             className="flex min-h-16 items-center justify-between gap-3 rounded-[1.15rem] bg-stone-50/80 px-4 py-3 ring-1 ring-stone-200/80"
           >
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-stone-950">{item.name}</p>
-              <p className="mt-1 truncate text-xs font-medium text-stone-500">
-                Target: {item.target}
-              </p>
+            <div className="flex min-w-0 items-center gap-3">
+              <InvestmentLogo
+                name={item.name}
+                ticker={item.ticker}
+                className="h-10 w-10"
+                fallbackInitials={initials(item.name)}
+              />
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-stone-950">{item.name}</p>
+                <p className="mt-1 truncate text-xs font-medium text-stone-500">
+                  Target: {item.target}
+                </p>
+              </div>
             </div>
             <div className="shrink-0 text-right">
               <p className="font-semibold text-stone-950">{item.price}</p>
@@ -336,22 +373,57 @@ function PantauSection({ watchlist }: { watchlist: WatchlistItem[] }) {
 function MarketOverviewSection() {
   return (
     <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-lg font-semibold text-stone-950">Produk Investasi</h2>
+      <SectionHeader
+        eyebrow="Produk"
+        title="Produk Investasi"
+        action={
+          <Link href="/market-prices" className="text-sm font-semibold text-emerald-700">
+            Lihat semua
+          </Link>
+        }
+      />
       <div className="mt-5 grid grid-cols-2 gap-3">
         {marketProductSegments.map((segment) => (
           <Link
             key={segment.title}
             href={segment.href}
             className={cn(
-              "group relative min-h-24 overflow-hidden rounded-[0.35rem] p-4 text-left ring-1 transition-all hover:-translate-y-0.5 hover:shadow-sm",
+              "group relative min-h-[8.4rem] overflow-hidden rounded-[1.2rem] p-4 text-left ring-1 transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(15,23,42,0.08)]",
               productSegmentClass(segment.tone),
             )}
           >
-            <span className="relative z-10 block text-sm font-medium text-stone-950">
-              {segment.title}
-            </span>
-            <span className={cn("absolute bottom-4 right-4 grid h-10 w-10 place-items-center rounded-full", productIconClass(segment.tone))}>
-              <ProductSegmentIcon icon={segment.icon} />
+            <span
+              className={cn(
+                "absolute inset-x-0 top-0 h-1",
+                productAccentClass(segment.tone),
+              )}
+              aria-hidden="true"
+            />
+            <span className="relative z-10 flex min-h-full flex-col justify-between gap-4">
+              <span className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block text-[0.66rem] font-bold uppercase tracking-[0.12em] text-emerald-700/80">
+                    {segment.eyebrow}
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold text-stone-950">
+                    {segment.title}
+                  </span>
+                </span>
+                <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[1rem] ring-1", productIconClass(segment.tone))}>
+                  <ProductSegmentIcon icon={segment.icon} />
+                </span>
+              </span>
+              <span>
+                <span className="line-clamp-2 block text-xs font-medium leading-5 text-stone-500">
+                  {segment.description}
+                </span>
+                <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-stone-950">
+                  Buka data
+                  <span className="transition-transform group-hover:translate-x-0.5" aria-hidden="true">
+                    &gt;
+                  </span>
+                </span>
+              </span>
             </span>
           </Link>
         ))}
@@ -468,17 +540,24 @@ function sparklinePoints(values: number[], width: number, height: number) {
 }
 
 function productSegmentClass(tone: string) {
-  if (tone === "emerald") return "bg-emerald-50/82 ring-emerald-100";
-  if (tone === "rose") return "bg-rose-50/82 ring-rose-100";
-  if (tone === "sky") return "bg-sky-50/82 ring-sky-100";
-  return "bg-violet-50/82 ring-violet-100";
+  if (tone === "dark") {
+    return "bg-[linear-gradient(145deg,#ffffff,#f6faf8)] ring-emerald-100 hover:bg-emerald-50/60";
+  }
+  return "bg-[linear-gradient(145deg,#ffffff,#f8fafc)] ring-stone-200 hover:ring-emerald-200 hover:bg-emerald-50/45";
+}
+
+function productAccentClass(tone: string) {
+  if (tone === "emerald") return "bg-emerald-500";
+  if (tone === "gold") return "bg-amber-400";
+  if (tone === "teal") return "bg-teal-500";
+  return "bg-stone-950";
 }
 
 function productIconClass(tone: string) {
-  if (tone === "emerald") return "bg-emerald-100 text-emerald-700";
-  if (tone === "rose") return "bg-rose-100 text-rose-700";
-  if (tone === "sky") return "bg-sky-100 text-sky-700";
-  return "bg-violet-100 text-violet-700";
+  if (tone === "emerald") return "bg-emerald-50 text-emerald-700 ring-emerald-100";
+  if (tone === "gold") return "bg-amber-50 text-amber-700 ring-amber-100";
+  if (tone === "teal") return "bg-teal-50 text-teal-700 ring-teal-100";
+  return "bg-stone-950 text-emerald-200 ring-stone-800";
 }
 
 function ProductSegmentIcon({ icon }: { icon: string }) {
@@ -568,4 +647,18 @@ function watchlistStatusLabel(status: WatchlistItem["status"]) {
   if (status === "waiting") return "Menunggu";
   if (status === "avoid") return "Hindari";
   return "Sudah dibeli";
+}
+
+function initials(value: string) {
+  const words = value
+    .replace(/\.JK$/iu, "")
+    .split(/\s+/u)
+    .filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
 }
