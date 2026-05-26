@@ -50,31 +50,40 @@ export default function PortoEditPage() {
     if (isAuthLoading) return;
     let isMounted = true;
 
-    void (async () => {
-      try {
-        const items = user
-          ? await loadCloudPortfolio(user)
-          : !isConfigured
-            ? (localArahDanaStorage.readPortfolio() ?? [])
-            : [];
-        const item = items.find((holding) => holding.id === state.id);
-        if (!isMounted) return;
-        setState((current) => ({
-          ...current,
-          items,
-          draft: item ? portfolioItemToDraft(item) : null,
-        }));
-        if (user) localArahDanaStorage.writePortfolio(items);
-      } catch {
-        if (!isMounted) return;
-        setState((current) => ({ ...current, items: [], draft: null }));
-      } finally {
-        if (isMounted) setIsHydrated(true);
-      }
-    })();
+    const loadTimer = window.setTimeout(() => {
+      void (async () => {
+        if (isMounted) {
+          setIsHydrated(false);
+          if (user) {
+            setState((current) => ({ ...current, items: [], draft: null }));
+          }
+        }
+        try {
+          const items = user
+            ? await loadCloudPortfolio(user)
+            : !isConfigured
+              ? (localArahDanaStorage.readPortfolio() ?? [])
+              : [];
+          const item = items.find((holding) => holding.id === state.id);
+          if (!isMounted) return;
+          setState((current) => ({
+            ...current,
+            items,
+            draft: item ? portfolioItemToDraft(item) : null,
+          }));
+          if (user) localArahDanaStorage.writePortfolio(items);
+        } catch {
+          if (!isMounted) return;
+          setState((current) => ({ ...current, items: [], draft: null }));
+        } finally {
+          if (isMounted) setIsHydrated(true);
+        }
+      })();
+    }, 0);
 
     return () => {
       isMounted = false;
+      window.clearTimeout(loadTimer);
     };
   }, [isAuthLoading, isConfigured, state.id, user]);
 
@@ -114,13 +123,13 @@ export default function PortoEditPage() {
       const nextItems = currentItems.map((item) =>
         item.id === state.id ? nextItem : item,
       );
-      localArahDanaStorage.writePortfolio(nextItems);
       if (user) {
         await saveCloudPortfolio(user, nextItems);
         const freshItems = await loadCloudPortfolio(user);
         localArahDanaStorage.writePortfolio(freshItems);
         setState((current) => ({ ...current, items: freshItems }));
       } else {
+        localArahDanaStorage.writePortfolio(nextItems);
         setState((current) => ({ ...current, items: nextItems }));
       }
       setIsSaved(true);
@@ -146,14 +155,14 @@ export default function PortoEditPage() {
     return (
       <FocusedFlowShell
         eyebrow="Edit Porto"
-        title="Holding tidak ditemukan"
-        description="Data yang ingin diedit tidak tersedia di penyimpanan perangkat ini."
+        title="Produk tidak ditemukan"
+        description="Produk ini tidak ada di data portofolio akun saat ini."
         backHref="/portfolio"
       >
         <FlowPanel className="grid gap-3">
           <p className="text-sm leading-6 text-stone-600">
-            Buka dari tombol kelola pada holding di halaman Porto agar konteks
-            instrumennya terbawa otomatis.
+            Produk mungkin sudah dihapus atau tidak pernah tersimpan di akun ini.
+            ArahDana tidak akan memulihkan data dari cache lama.
           </p>
           <ButtonLink href="/portfolio" variant="primary">
             Kembali ke Porto

@@ -10,6 +10,7 @@ import {
   searchMarketAssets,
   type MarketAsset,
 } from "@/lib/market/discovery";
+import { trackAppEvent } from "@/lib/monitoring/events";
 import { cn } from "@/lib/utils/format";
 
 export default function MarketSearchPage() {
@@ -26,6 +27,12 @@ export default function MarketSearchPage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (query.trim()) {
+      trackAppEvent("market_search_used", {
+        page: "/market/search",
+        count: suggestions.length,
+      });
+    }
     const asset = suggestions[0];
     if (asset) setSelectedAsset(asset);
   }

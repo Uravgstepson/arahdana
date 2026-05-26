@@ -6,6 +6,7 @@ import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
 import { useAuth } from "@/components/AuthProvider";
 import { CsvPortfolioImportSection } from "@/components/CsvPortfolioImportSection";
+import { trackAppEvent } from "@/lib/monitoring/events";
 
 export function IntegrationsCsvImport() {
   const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
@@ -68,8 +69,6 @@ export function IntegrationsCsvImport() {
       return;
     }
 
-    localArahDanaStorage.writePortfolio(nextItems);
-
     let savedItems = nextItems;
     if (user) {
       await saveCloudPortfolio(user, nextItems);
@@ -77,11 +76,16 @@ export function IntegrationsCsvImport() {
       localArahDanaStorage.writePortfolio(savedItems);
       setStatusMessage("Import tersimpan dan siap dipakai.");
     } else {
+      localArahDanaStorage.writePortfolio(nextItems);
       setStatusMessage("Import tersimpan di perangkat ini.");
     }
 
     setItems(savedItems);
     setHasStoredPortfolio(true);
+    trackAppEvent("csv_import_used", {
+      page: "/integrations",
+      source: "integrations_import",
+    });
   }
 
   return (

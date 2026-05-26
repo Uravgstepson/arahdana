@@ -14,6 +14,7 @@ import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type { PortfolioItem } from "@/lib/types/investment";
 import { formatRupiah } from "@/lib/utils/format";
 import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
+import { trackAppEvent } from "@/lib/monitoring/events";
 import {
   createHoldingDraft,
   draftToPortfolioItem,
@@ -99,8 +100,10 @@ export default function PortoAddPage() {
   }
 
   async function savePortfolio(nextItems: PortfolioItem[]) {
-    localArahDanaStorage.writePortfolio(nextItems);
-    if (!user) return;
+    if (!user) {
+      localArahDanaStorage.writePortfolio(nextItems);
+      return;
+    }
     await saveCloudPortfolio(user, nextItems);
     const freshItems = await loadCloudPortfolio(user);
     localArahDanaStorage.writePortfolio(freshItems);
@@ -117,6 +120,7 @@ export default function PortoAddPage() {
       const current = await readCurrentPortfolio();
       const item = draftToPortfolioItem(draft, crypto.randomUUID());
       await savePortfolio([item, ...current]);
+      trackAppEvent("portfolio_added", { page: "/porto/add", source: "manual" });
       setSavedName(item.name);
     } catch (error) {
       setError(
@@ -131,6 +135,10 @@ export default function PortoAddPage() {
     void (async () => {
       try {
         await savePortfolio(nextItems);
+        trackAppEvent("csv_import_used", {
+          page: "/porto/add",
+          source: "portfolio_import",
+        });
         setImportItems(nextItems);
         setHasStoredPortfolio(nextItems.length > 0);
         setImportMessage("Import CSV selesai dan data sudah masuk ke Porto.");

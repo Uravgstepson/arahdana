@@ -49,6 +49,8 @@ const LEGACY_PORTFOLIO_KEYS = [
   "investmentData",
   "portfolioSummary",
   "dashboardSummary",
+  "cachedPortfolio",
+  "cachedHoldings",
 ];
 let activeUserId: string | null = null;
 let storageWriteEventsPaused = false;

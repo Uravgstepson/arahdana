@@ -9,6 +9,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type { PortfolioItem } from "@/lib/types/investment";
 import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
+import { trackAppEvent } from "@/lib/monitoring/events";
 
 export default function PortoImportPage() {
   const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
@@ -57,6 +58,10 @@ export default function PortoImportPage() {
       localArahDanaStorage.writePortfolio(savedItems);
       setItems(savedItems);
       setHasStoredPortfolio(savedItems.length > 0);
+      trackAppEvent("csv_import_used", {
+        page: "/porto/import",
+        source: "portfolio_import",
+      });
       setIsImported(true);
     })().catch((error) => {
       setMessage(

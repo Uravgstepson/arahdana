@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { trackAppEvent } from "@/lib/monitoring/events";
 import { cn } from "@/lib/utils/format";
 
 const PRIVACY_STORAGE_KEY = "arahdana.privacyLock";
@@ -201,6 +202,10 @@ function readPrivacyMode() {
 function writePrivacyMode(isPrivate: boolean) {
   window.localStorage.setItem(PRIVACY_STORAGE_KEY, isPrivate ? "true" : "false");
   window.dispatchEvent(new CustomEvent(PRIVACY_EVENT));
+  if (isPrivate) {
+    trackAppEvent("privacy_mode_enabled", { source: "portfolio_toggle" });
+    trackAppEvent("app_lock_enabled", { source: "portfolio_toggle" });
+  }
 }
 
 function writePrivacyReveal(isRevealed: boolean) {

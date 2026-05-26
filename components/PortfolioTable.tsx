@@ -15,7 +15,10 @@ import type {
   PortfolioItem,
   RiskCategory,
 } from "@/lib/types/investment";
-import { localArahDanaStorage } from "@/lib/storage/localStorage";
+import {
+  localArahDanaStorage,
+  setArahDanaStorageWriteEventsPaused,
+} from "@/lib/storage/localStorage";
 import {
   dataSourceLabel,
   fetchPublicMarketData,
@@ -46,6 +49,7 @@ import {
 import { normalizeSafeTicker, validateTicker } from "@/lib/validation";
 import { ActionSheet } from "@/components/ActionSheet";
 import { Button, ButtonLink } from "@/components/ui";
+import { trackAppEvent } from "@/lib/monitoring/events";
 
 type ManagedHolding = {
   holding: HoldingView;
@@ -58,6 +62,7 @@ export function PortfolioTable() {
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [aprMoneyMarketFund, setAprMoneyMarketFund] = useState(0.05);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isPortfolioLoading, setIsPortfolioLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -70,8 +75,12 @@ export function PortfolioTable() {
     if (isAuthLoading) return;
 
     let isMounted = true;
-    window.setTimeout(() => {
+    const loadTimer = window.setTimeout(() => {
       void (async () => {
+        if (isMounted) {
+          setIsPortfolioLoading(true);
+          if (user) setItems([]);
+        }
         const storedAlertRules = localArahDanaStorage.readAlertRules() ?? [];
 
         const settings = localArahDanaStorage.readSettings();
@@ -98,6 +107,7 @@ export function PortfolioTable() {
               : "Mode lokal aktif. Data tersimpan di perangkat ini.",
           );
           setIsHydrated(true);
+          setIsPortfolioLoading(false);
           return;
         }
 
@@ -112,7 +122,7 @@ export function PortfolioTable() {
           setAlertRules(
             cloudAlertRules.length > 0 ? cloudAlertRules : storedAlertRules,
           );
-          localArahDanaStorage.writePortfolio(nextItems);
+          writePortfolioMirror(nextItems);
           setSyncMessage(
             nextItems.length > 0
               ? "Data aman dan siap dipakai."
@@ -128,14 +138,71 @@ export function PortfolioTable() {
               : "Portofolio akun belum bisa dimuat.",
           );
         } finally {
-          if (isMounted) setIsHydrated(true);
+          if (isMounted) {
+            setIsHydrated(true);
+            setIsPortfolioLoading(false);
+          }
         }
       })();
     }, 0);
     return () => {
       isMounted = false;
+      window.clearTimeout(loadTimer);
     };
   }, [isAuthLoading, isConfigured, user]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    let isMounted = true;
+
+    async function refetchPortfolio() {
+      if (isAuthLoading) return;
+      if (user) {
+        setIsPortfolioLoading(true);
+        setItems([]);
+      }
+
+      try {
+        const nextItems = user
+          ? await loadCloudPortfolio(user)
+          : !isConfigured
+            ? (localArahDanaStorage.readPortfolio() ?? [])
+            : [];
+        if (!isMounted) return;
+        const normalizedItems = normalizePortfolioItems(nextItems);
+        setItems(normalizedItems);
+        if (user) writePortfolioMirror(normalizedItems);
+      } catch {
+        if (!isMounted) return;
+        setItems([]);
+      } finally {
+        if (isMounted) setIsPortfolioLoading(false);
+      }
+    }
+
+    function handlePortfolioUpdate() {
+      void refetchPortfolio();
+    }
+
+    window.addEventListener("arahdana:portfolio-updated", handlePortfolioUpdate);
+    window.addEventListener(
+      "arahdana:dashboard-summary-updated",
+      handlePortfolioUpdate,
+    );
+    window.addEventListener("focus", handlePortfolioUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener(
+        "arahdana:portfolio-updated",
+        handlePortfolioUpdate,
+      );
+      window.removeEventListener(
+        "arahdana:dashboard-summary-updated",
+        handlePortfolioUpdate,
+      );
+      window.removeEventListener("focus", handlePortfolioUpdate);
+    };
+  }, [isAuthLoading, isConfigured, isHydrated, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -257,50 +324,66 @@ export function PortfolioTable() {
         : null,
     };
   }, [aprMoneyMarketFund, items]);
-  if (!isHydrated) {
+  if (!isHydrated || isPortfolioLoading) {
     return (
       <LoadingState
         title="Memuat portofolio"
-        message="Mengambil holding lokal dan cloud bila akun tersedia."
+        message={
+          user
+            ? "Mengambil holding akun terbaru."
+            : "Mengambil holding lokal bila mode tamu aktif."
+        }
       />
     );
   }
 
   async function commitPortfolio(nextItems: PortfolioItem[], successMessage = "Portofolio siap.") {
     const normalizedItems = normalizePortfolioItems(nextItems);
-    setItems(normalizedItems);
-    localArahDanaStorage.writePortfolio(normalizedItems);
 
     if (!isConfigured) {
+      setItems(normalizedItems);
+      localArahDanaStorage.writePortfolio(normalizedItems);
       setSyncMessage("Mode lokal aktif. Data tersimpan di perangkat ini.");
-      return;
+      return true;
     }
 
     if (!user) {
       setSyncMessage("Login untuk menyimpan portofolio akun.");
-      return;
+      return false;
     }
 
     try {
+      setItems(normalizedItems);
       await saveCloudPortfolio(user, normalizedItems);
       const freshItems = normalizePortfolioItems(await loadCloudPortfolio(user));
       setItems(freshItems);
       localArahDanaStorage.writePortfolio(freshItems);
       setSyncMessage(successMessage);
+      return true;
     } catch (error) {
+      const cloudItems = await loadCloudPortfolio(user).catch(() => []);
+      const freshItems = normalizePortfolioItems(cloudItems);
+      setItems(freshItems);
+      localArahDanaStorage.writePortfolio(freshItems);
       setSyncMessage(
         error instanceof Error
-          ? `Perubahan lokal belum tersinkron. ${error.message}`
-          : "Perubahan lokal belum tersinkron.",
+          ? `Perubahan belum tersimpan. ${error.message}`
+          : "Perubahan belum tersimpan.",
       );
+      return false;
     }
   }
 
   function deleteItem(id: string) {
-    void commitPortfolio(
-      items.filter((item) => item.id !== id),
-      "Holding dihapus dari portofolio akun.",
-    );
+    void (async () => {
+      const didDelete = await commitPortfolio(
+        items.filter((item) => item.id !== id),
+        "Holding dihapus dari portofolio akun.",
+      );
+      if (didDelete) {
+        trackAppEvent("portfolio_deleted", { page: "/portfolio" });
+      }
+    })();
   }
 
   async function resetPortfolio() {
@@ -1221,4 +1304,13 @@ function formatDateTime(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function writePortfolioMirror(items: PortfolioItem[]) {
+  setArahDanaStorageWriteEventsPaused(true);
+  try {
+    localArahDanaStorage.writePortfolio(items);
+  } finally {
+    setArahDanaStorageWriteEventsPaused(false);
+  }
 }

@@ -160,32 +160,55 @@ export default function AlertsPage() {
 
   useEffect(() => {
     if (!isHydrated) return;
+    let isMounted = true;
 
     function handlePortfolioPricesUpdated() {
-      const latestPortfolio =
-        user
-          ? (localArahDanaStorage.readPortfolio() ?? [])
-          : !isConfigured
-            ? (localArahDanaStorage.readPortfolio() ?? [])
-            : [];
       const latestSettings = normalizeAlertSettings(localArahDanaStorage.readSettings());
-      setPortfolio(latestPortfolio);
       setSettings(latestSettings);
-      setSmartAlerts(
-        generateSmartAlerts({
-          portfolio: latestPortfolio,
-          watchlist,
-          analysisResults,
-          goals,
-          goalContributions,
-          settings: latestSettings,
-        }),
-      );
+      if (!user) {
+        const latestPortfolio = !isConfigured
+          ? (localArahDanaStorage.readPortfolio() ?? [])
+          : [];
+        setPortfolio(latestPortfolio);
+        setSmartAlerts(
+          generateSmartAlerts({
+            portfolio: latestPortfolio,
+            watchlist,
+            analysisResults,
+            goals,
+            goalContributions,
+            settings: latestSettings,
+          }),
+        );
+        return;
+      }
+
+      void loadCloudPortfolio(user)
+        .then((latestPortfolio) => {
+          if (!isMounted) return;
+          setPortfolio(latestPortfolio);
+          setSmartAlerts(
+            generateSmartAlerts({
+              portfolio: latestPortfolio,
+              watchlist,
+              analysisResults,
+              goals,
+              goalContributions,
+              settings: latestSettings,
+            }),
+          );
+        })
+        .catch(() => {
+          if (!isMounted) return;
+          setPortfolio([]);
+          setSmartAlerts([]);
+        });
     }
 
     window.addEventListener("arahdana:portfolio-updated", handlePortfolioPricesUpdated);
     window.addEventListener("arahdana:portfolio-prices-updated", handlePortfolioPricesUpdated);
     return () => {
+      isMounted = false;
       window.removeEventListener("arahdana:portfolio-updated", handlePortfolioPricesUpdated);
       window.removeEventListener("arahdana:portfolio-prices-updated", handlePortfolioPricesUpdated);
     };

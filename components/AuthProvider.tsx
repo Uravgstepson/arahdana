@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { User } from "@supabase/supabase-js";
@@ -26,6 +27,7 @@ import {
   loadCloudUserData,
   writeUserDataSnapshotToLocal,
 } from "@/lib/supabase/sync";
+import { trackAppEvent } from "@/lib/monitoring/events";
 
 type AuthContextValue = {
   isConfigured: boolean;
@@ -42,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const configured = isSupabaseConfigured();
+  const trackedLoginUserRef = useRef<string | null>(null);
 
   const refreshAuth = useCallback(async () => {
     if (!configured) {
@@ -105,6 +108,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, [refreshAuth]);
+
+  useEffect(() => {
+    if (!user?.id || trackedLoginUserRef.current === user.id) return;
+    trackedLoginUserRef.current = user.id;
+    trackAppEvent("login_success", { source: "auth" });
+  }, [user?.id]);
 
   const value = useMemo(
     () => ({

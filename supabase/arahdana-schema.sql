@@ -93,6 +93,7 @@ create table if not exists public.feedback (
   user_id uuid references auth.users(id) on delete set null,
   email text,
   message text not null,
+  page text,
   app_version text not null,
   page_url text,
   created_at timestamptz not null default now()
@@ -264,6 +265,7 @@ alter table public.analysis_results add column if not exists created_at timestam
 alter table public.feedback add column if not exists user_id uuid references auth.users(id) on delete set null;
 alter table public.feedback add column if not exists email text;
 alter table public.feedback add column if not exists message text not null default '';
+alter table public.feedback add column if not exists page text;
 alter table public.feedback add column if not exists app_version text not null default 'ArahDana unknown';
 alter table public.feedback add column if not exists page_url text;
 alter table public.feedback add column if not exists created_at timestamptz not null default now();
