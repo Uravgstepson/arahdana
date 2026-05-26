@@ -3,6 +3,8 @@
 import type { User } from "@supabase/supabase-js";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import {
+  clearLegacyPortfolioStorage,
+  dispatchPortfolioDataInvalidated,
   localArahDanaStorage,
   setArahDanaStorageWriteEventsPaused,
 } from "@/lib/storage/localStorage";
@@ -553,6 +555,10 @@ export function writeUserDataSnapshotToLocal(snapshot: UserDataSnapshot) {
     window.dispatchEvent(new Event("arahdana:user-data-ready"));
     window.dispatchEvent(new Event("arahdana:settings-updated"));
     window.dispatchEvent(new Event("arahdana:notifications-updated"));
+    window.dispatchEvent(new Event("arahdana:portfolio-updated"));
+    window.dispatchEvent(new Event("arahdana:dashboard-summary-updated"));
+    window.dispatchEvent(new Event("arahdana:analysis-summary-updated"));
+    window.dispatchEvent(new Event("arahdana:portfolio-summary-updated"));
     window.dispatchEvent(new Event("arahdana:portfolio-prices-updated"));
   }
 }
@@ -607,6 +613,49 @@ export function hasUserFinancialData(snapshot: UserDataSnapshot) {
 
 export async function syncLocalDataToCloud(user: User) {
   return syncUserDataSnapshotToCloud(user, readLocalUserDataSnapshot());
+}
+
+export async function resetCloudPortfolioData(user: User) {
+  const [portfolioResult, reportsResult] = await Promise.allSettled([
+    saveCloudPortfolio(user, []),
+    saveCloudReports(user, []),
+  ]);
+
+  const rejected = [portfolioResult, reportsResult].find(
+    (result) => result.status === "rejected",
+  );
+  if (rejected?.status === "rejected") throw rejected.reason;
+
+  return {
+    portfolioCount: 0,
+    reportCount: 0,
+  };
+}
+
+export async function resetPortfolioForCurrentUser(
+  user: User | null,
+  options: { isConfigured?: boolean } = {},
+) {
+  if (options.isConfigured && !user) {
+    throw new Error("Login dulu untuk reset portofolio akun.");
+  }
+
+  localArahDanaStorage.writePortfolio([]);
+  localArahDanaStorage.writeReports([]);
+  clearLegacyPortfolioStorage();
+
+  if (user) {
+    await resetCloudPortfolioData(user);
+    localArahDanaStorage.writePortfolio([]);
+    localArahDanaStorage.writeReports([]);
+  }
+
+  dispatchPortfolioDataInvalidated();
+
+  return {
+    portfolioCount: 0,
+    reportCount: 0,
+  };
 }
 
 const syncStepLabels = [

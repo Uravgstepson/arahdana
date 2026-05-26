@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeAppPath } from "@/lib/routes";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = safeNextPath(requestUrl.searchParams.get("next"));
+  const next = normalizeAppPath(requestUrl.searchParams.get("next"));
 
   if (code) {
     const supabase = await createSupabaseServerClient();
@@ -24,11 +25,6 @@ export async function GET(request: NextRequest) {
   const loginUrl = new URL("/login", request.url);
   loginUrl.searchParams.set("error", "auth_callback");
   return NextResponse.redirect(loginUrl);
-}
-
-function safeNextPath(value: string | null) {
-  if (value?.startsWith("/") && !value.startsWith("//")) return value;
-  return "/dashboard";
 }
 
 async function upsertServerProfile(

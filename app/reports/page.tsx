@@ -7,6 +7,7 @@ import { PrivateValue } from "@/components/PrivateValue";
 import { dispatchToast } from "@/components/ToastViewport";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import {
+  loadCloudPortfolio,
   loadCloudReports,
   saveCloudReports,
 } from "@/lib/supabase/sync";
@@ -51,6 +52,7 @@ export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>("monthly");
   const [data, setData] = useState<ReportData>(() => readLocalReportData());
   const [isHydrated, setIsHydrated] = useState(false);
+  const [canSyncReports, setCanSyncReports] = useState(false);
   const [syncMessage, setSyncMessage] = useState("Memuat laporan...");
   const [exportMessage, setExportMessage] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
@@ -70,33 +72,39 @@ export default function ReportsPage() {
           setReports(sortReports(localReports));
           setSelectedReportId(localReports[0]?.id ?? null);
           setSyncMessage("Laporan aman di perangkat ini.");
+          setCanSyncReports(true);
           setIsHydrated(true);
           return;
         }
 
         try {
-          const cloudReports = await loadCloudReports(user);
+          const [cloudReports, cloudPortfolio] = await Promise.all([
+            loadCloudReports(user),
+            loadCloudPortfolio(user),
+          ]);
           if (!isMounted) return;
-          const nextReports = cloudReports.length > 0 ? cloudReports : localReports;
-          setData(localData);
+          const nextReports = cloudReports;
+          setData({ ...localData, portfolio: cloudPortfolio });
           setReports(sortReports(nextReports));
           setSelectedReportId(nextReports[0]?.id ?? null);
           localArahDanaStorage.writeReports(nextReports);
           setSyncMessage(
-            cloudReports.length > 0
+            nextReports.length > 0
               ? "Laporan siap dan terjaga."
-              : "Laporan siap. Laporan baru akan dijaga otomatis.",
+              : "Belum ada laporan portofolio tersimpan.",
           );
+          setCanSyncReports(true);
         } catch (error) {
           if (!isMounted) return;
-          setData(localData);
-          setReports(sortReports(localReports));
-          setSelectedReportId(localReports[0]?.id ?? null);
+          setData({ ...localData, portfolio: [] });
+          setReports([]);
+          setSelectedReportId(null);
           setSyncMessage(
             error instanceof Error
-              ? `Laporan tetap aman di perangkat ini. ${error.message}`
-              : "Laporan tetap aman di perangkat ini.",
+              ? `Laporan akun belum bisa dimuat. ${error.message}`
+              : "Laporan akun belum bisa dimuat.",
           );
+          setCanSyncReports(false);
         } finally {
           if (isMounted) setIsHydrated(true);
         }
@@ -110,6 +118,37 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (!isHydrated) return;
+
+    function handlePortfolioDataUpdate() {
+      if (!user) {
+        setData(readLocalReportData());
+        setReports(sortReports(localArahDanaStorage.readReports() ?? []));
+        return;
+      }
+
+      void Promise.all([loadCloudPortfolio(user), loadCloudReports(user)])
+        .then(([portfolio, nextReports]) => {
+          setData((current) => ({ ...current, portfolio }));
+          setReports(sortReports(nextReports));
+          setSelectedReportId(nextReports[0]?.id ?? null);
+        })
+        .catch(() => {
+          setData((current) => ({ ...current, portfolio: [] }));
+          setReports([]);
+          setSelectedReportId(null);
+        });
+    }
+
+    window.addEventListener("arahdana:portfolio-updated", handlePortfolioDataUpdate);
+    window.addEventListener("arahdana:portfolio-summary-updated", handlePortfolioDataUpdate);
+    return () => {
+      window.removeEventListener("arahdana:portfolio-updated", handlePortfolioDataUpdate);
+      window.removeEventListener("arahdana:portfolio-summary-updated", handlePortfolioDataUpdate);
+    };
+  }, [isHydrated, user]);
+
+  useEffect(() => {
+    if (!isHydrated || !canSyncReports) return;
     localArahDanaStorage.writeReports(reports);
     if (!user) return;
     void saveCloudReports(user, reports).catch((error) => {
@@ -119,7 +158,7 @@ export default function ReportsPage() {
           : "Laporan tersimpan di perangkat ini.",
       );
     });
-  }, [isHydrated, reports, user]);
+  }, [canSyncReports, isHydrated, reports, user]);
 
   const selectedReport = useMemo(
     () => reports.find((report) => report.id === selectedReportId) ?? reports[0],
@@ -127,17 +166,17 @@ export default function ReportsPage() {
   );
 
   function refreshSourceData() {
-    const nextData = readLocalReportData();
+    const nextData = user ? data : readLocalReportData();
     setData(nextData);
     dispatchToast({
       tone: "info",
       title: "Data laporan diperbarui",
-      message: "Laporan berikutnya akan memakai data lokal terbaru.",
+      message: "Laporan berikutnya akan memakai data terbaru.",
     });
   }
 
   function generateReport() {
-    const latestData = readLocalReportData();
+    const latestData = user ? data : readLocalReportData();
     const report = generatePortfolioReviewReport({
       type: reportType,
       portfolio: latestData.portfolio,

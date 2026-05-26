@@ -9,7 +9,7 @@ import {
 } from "@/lib/providers/marketClient";
 import { normalizeMarketTicker } from "@/lib/market/tickerUniverse";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
-import { saveCloudPortfolio } from "@/lib/supabase/sync";
+import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
 import { normalizeSafeTicker, validateTicker } from "@/lib/validation";
 
 const autoRefreshIntervalMs = 15 * 60 * 1000;
@@ -18,7 +18,7 @@ const maxTickersPerPass = 12;
 const lastRunKey = "arahdana.marketPrices.lastAutoRefreshAt";
 
 export function AutoPriceRefresh() {
-  const { user } = useAuth();
+  const { isConfigured, isLoading, user } = useAuth();
   const isRunningRef = useRef(false);
 
   useEffect(() => {
@@ -26,6 +26,8 @@ export function AutoPriceRefresh() {
 
     async function refreshIfNeeded(force = false) {
       if (cancelled || isRunningRef.current) return;
+      if (isLoading) return;
+      if (isConfigured && !user) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
 
       const now = Date.now();
@@ -34,7 +36,9 @@ export function AutoPriceRefresh() {
         return;
       }
 
-      const portfolio = localArahDanaStorage.readPortfolio() ?? [];
+      const portfolio = user
+        ? await loadCloudPortfolio(user)
+        : localArahDanaStorage.readPortfolio() ?? [];
       const candidates = portfolio
         .filter((item) => item.ticker?.trim())
         .filter((item) => priceLooksStale(item, now))
@@ -100,7 +104,9 @@ export function AutoPriceRefresh() {
           return;
         }
 
-        const latestPortfolio = localArahDanaStorage.readPortfolio() ?? portfolio;
+        const latestPortfolio = user
+          ? await loadCloudPortfolio(user)
+          : localArahDanaStorage.readPortfolio() ?? portfolio;
         const nextPortfolio = latestPortfolio.map((item) => {
           const update = tickerUpdates.get(normalizeTicker(item.ticker ?? ""));
           if (!update) return item;
@@ -149,7 +155,7 @@ export function AutoPriceRefresh() {
       window.clearInterval(intervalId);
       window.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [user]);
+  }, [isConfigured, isLoading, user]);
 
   return null;
 }

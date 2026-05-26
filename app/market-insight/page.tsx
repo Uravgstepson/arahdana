@@ -465,11 +465,10 @@ function WatchPill({
 }
 
 async function loadUserContext(user: ReturnType<typeof useAuth>["user"]) {
-  const localPortfolio = localArahDanaStorage.readPortfolio() ?? [];
   const localSettings = normalizeSettings(localArahDanaStorage.readSettings());
 
   if (!user) {
-    return { portfolio: localPortfolio, settings: localSettings };
+    return { portfolio: [], settings: localSettings };
   }
 
   try {
@@ -479,11 +478,11 @@ async function loadUserContext(user: ReturnType<typeof useAuth>["user"]) {
     ]);
 
     return {
-      portfolio: cloudPortfolio.length > 0 ? cloudPortfolio : localPortfolio,
+      portfolio: cloudPortfolio,
       settings: normalizeSettings(cloudSettings ?? localSettings),
     };
   } catch {
-    return { portfolio: localPortfolio, settings: localSettings };
+    return { portfolio: [], settings: localSettings };
   }
 }
 

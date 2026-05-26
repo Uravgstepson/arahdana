@@ -1,26 +1,67 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CsvPortfolioImportSection } from "@/components/CsvPortfolioImportSection";
 import { FlowPanel, FocusedFlowShell } from "@/components/FocusedFlow";
 import { ButtonLink } from "@/components/ui";
+import { useAuth } from "@/components/AuthProvider";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type { PortfolioItem } from "@/lib/types/investment";
+import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
 
 export default function PortoImportPage() {
-  const [items, setItems] = useState<PortfolioItem[]>(
-    () => localArahDanaStorage.readPortfolio() ?? [],
-  );
-  const [hasStoredPortfolio, setHasStoredPortfolio] = useState(
-    () => localArahDanaStorage.readPortfolio() !== null,
-  );
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
+  const [items, setItems] = useState<PortfolioItem[]>([]);
+  const [hasStoredPortfolio, setHasStoredPortfolio] = useState(false);
   const [isImported, setIsImported] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    let isMounted = true;
+
+    void (async () => {
+      try {
+        const nextItems = user
+          ? await loadCloudPortfolio(user)
+          : !isConfigured
+            ? (localArahDanaStorage.readPortfolio() ?? [])
+            : [];
+        if (!isMounted) return;
+        setItems(nextItems);
+        setHasStoredPortfolio(nextItems.length > 0);
+        if (user) localArahDanaStorage.writePortfolio(nextItems);
+      } catch {
+        if (!isMounted) return;
+        setItems([]);
+        setHasStoredPortfolio(false);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, isConfigured, user]);
 
   function saveImport(nextItems: PortfolioItem[]) {
-    localArahDanaStorage.writePortfolio(nextItems);
-    setItems(nextItems);
-    setHasStoredPortfolio(true);
-    setIsImported(true);
+    void (async () => {
+      if (!user && isConfigured) {
+        setMessage("Login dulu untuk menyimpan import ke akun.");
+        return;
+      }
+
+      localArahDanaStorage.writePortfolio(nextItems);
+      if (user) await saveCloudPortfolio(user, nextItems);
+      setItems(nextItems);
+      setHasStoredPortfolio(nextItems.length > 0);
+      setIsImported(true);
+    })().catch((error) => {
+      setMessage(
+        error instanceof Error
+          ? `Import belum tersimpan. ${error.message}`
+          : "Import belum tersimpan.",
+      );
+    });
   }
 
   return (
@@ -43,6 +84,13 @@ export default function PortoImportPage() {
               Buka Review
             </ButtonLink>
           </div>
+        </FlowPanel>
+      ) : null}
+      {message ? (
+        <FlowPanel>
+          <p className="text-sm font-semibold leading-6 text-amber-800">
+            {message}
+          </p>
         </FlowPanel>
       ) : null}
 

@@ -12,6 +12,7 @@ import {
   showBrowserNotification,
 } from "@/lib/notifications/notificationSystem";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
+import { loadCloudPortfolio } from "@/lib/supabase/sync";
 import type { AppNotification, NotificationType, UserSettings } from "@/lib/types/investment";
 
 const badgeStyles: Record<NotificationType, string> = {
@@ -24,7 +25,7 @@ const badgeStyles: Record<NotificationType, string> = {
 };
 
 export default function NotificationsPage() {
-  const { user } = useAuth();
+  const { isConfigured, user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>(
     () => readStoredNotifications(),
   );
@@ -94,11 +95,16 @@ export default function NotificationsPage() {
       };
       localArahDanaStorage.writeSettings(nextSettings);
       setSettings(nextSettings);
-      dispatchToast({ tone: "success", title: "Browser notifications aktif" });
+      dispatchToast({ tone: "success", title: "Notifikasi aktif" });
     }
   }
 
-  function generateNow() {
+  async function generateNow() {
+    const portfolio = user
+      ? await loadCloudPortfolio(user).catch(() => [])
+      : !isConfigured
+        ? localArahDanaStorage.readPortfolio() ?? []
+        : [];
     const generated = generateCalmNotifications({
       settings: {
         capital: 10_000_000,
@@ -109,7 +115,7 @@ export default function NotificationsPage() {
         ...settings,
         notificationPreferences: preferences,
       },
-      portfolio: localArahDanaStorage.readPortfolio() ?? [],
+      portfolio,
       watchlist: localArahDanaStorage.readWatchlist() ?? [],
       goals: localArahDanaStorage.readGoals() ?? [],
       goalContributions: localArahDanaStorage.readGoalContributions() ?? [],
@@ -155,7 +161,7 @@ export default function NotificationsPage() {
           <div>
             <p className="text-sm font-semibold text-stone-950">Preferensi aktif</p>
             <p className="mt-1 text-sm leading-6 text-stone-600">
-              Reminder {frequencyLabel(preferences.reminderFrequency)}, {preferences.quietMode ? "quiet mode aktif" : "quiet mode off"}, browser {permissionLabel(permission)}.
+              Reminder {frequencyLabel(preferences.reminderFrequency)}, {preferences.quietMode ? "mode tenang aktif" : "mode tenang off"}, notifikasi {permissionLabel(permission)}.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -165,7 +171,7 @@ export default function NotificationsPage() {
                 onClick={enableBrowserNotifications}
                 className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
               >
-                Enable Notifications
+                Aktifkan notifikasi
               </button>
             ) : null}
             <button

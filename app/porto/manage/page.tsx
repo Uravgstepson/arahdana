@@ -1,17 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FlowPanel, FocusedFlowShell } from "@/components/FocusedFlow";
 import { ButtonLink } from "@/components/ui";
+import { useAuth } from "@/components/AuthProvider";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type { PortfolioItem } from "@/lib/types/investment";
 import { formatRupiah } from "@/lib/utils/format";
+import { loadCloudPortfolio } from "@/lib/supabase/sync";
 import { productTypeLabel } from "../holdingFlow";
 
 export default function PortoManagePage() {
-  const [items] = useState<PortfolioItem[]>(
-    () => localArahDanaStorage.readPortfolio() ?? [],
-  );
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
+  const [items, setItems] = useState<PortfolioItem[]>([]);
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    let isMounted = true;
+
+    void (async () => {
+      try {
+        const nextItems = user
+          ? await loadCloudPortfolio(user)
+          : !isConfigured
+            ? (localArahDanaStorage.readPortfolio() ?? [])
+            : [];
+        if (!isMounted) return;
+        setItems(nextItems);
+        if (user) localArahDanaStorage.writePortfolio(nextItems);
+      } catch {
+        if (isMounted) setItems([]);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, isConfigured, user]);
 
   return (
     <FocusedFlowShell

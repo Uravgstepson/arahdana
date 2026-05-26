@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import { PortfolioHealthBreakdown } from "@/components/PortfolioHealthBreakdown";
 import { PrivateValue } from "@/components/PrivateValue";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
+import { loadCloudPortfolio, loadCloudReports } from "@/lib/supabase/sync";
 import type {
   PortfolioItem,
   PortfolioReviewReport,
@@ -29,16 +31,39 @@ type ReviewData = {
 const JOURNAL_STORAGE_KEY = "arahdana.journal";
 
 export default function ReviewPage() {
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [data, setData] = useState<ReviewData>(() => emptyReviewData());
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
+    if (isAuthLoading) return;
+    let isMounted = true;
     const timeoutId = window.setTimeout(() => {
-      setData(readReviewData());
-      setIsHydrated(true);
+      void (async () => {
+        const localData = readReviewData(!isConfigured);
+        try {
+          const accountData = user
+            ? {
+                ...localData,
+                portfolio: await loadCloudPortfolio(user),
+                reports: sortReports(await loadCloudReports(user)),
+              }
+            : localData;
+          if (!isMounted) return;
+          setData(accountData);
+        } catch {
+          if (!isMounted) return;
+          setData({ ...localData, portfolio: [], reports: [] });
+        } finally {
+          if (isMounted) setIsHydrated(true);
+        }
+      })();
     }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isAuthLoading, isConfigured, user]);
 
   const latestReport = data.reports[0] ?? null;
   const latestJournal = data.journal[0] ?? null;
@@ -234,10 +259,10 @@ function emptyReviewData(): ReviewData {
   };
 }
 
-function readReviewData(): ReviewData {
+function readReviewData(includeLocalPortfolio: boolean): ReviewData {
   return {
-    portfolio: localArahDanaStorage.readPortfolio() ?? [],
-    reports: sortReports(localArahDanaStorage.readReports() ?? []),
+    portfolio: includeLocalPortfolio ? localArahDanaStorage.readPortfolio() ?? [] : [],
+    reports: includeLocalPortfolio ? sortReports(localArahDanaStorage.readReports() ?? []) : [],
     journal: readJournalEntries(),
     settings: localArahDanaStorage.readSettings() ?? {},
   };

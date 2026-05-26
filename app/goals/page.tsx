@@ -60,7 +60,7 @@ const selectableInstrumentTypes: InvestmentType[] = [
 ];
 
 export default function GoalsPage() {
-  const { isLoading: isAuthLoading, user } = useAuth();
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [goals, setGoals] = useState<FinancialGoal[]>([]);
   const [contributions, setContributions] = useState<GoalContribution[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
@@ -79,7 +79,9 @@ export default function GoalsPage() {
         const localContributions = normalizeContributions(
           localArahDanaStorage.readGoalContributions() ?? [],
         );
-        const localPortfolio = localArahDanaStorage.readPortfolio() ?? [];
+        const localPortfolio = !isConfigured
+          ? localArahDanaStorage.readPortfolio() ?? []
+          : [];
         const localSettings = localArahDanaStorage.readSettings();
         const localApr =
           typeof localSettings?.aprMoneyMarketFund === "number" &&
@@ -110,7 +112,7 @@ export default function GoalsPage() {
           const nextGoals = cloudGoals.length > 0 ? cloudGoals : localGoals;
           const nextContributions =
             cloudContributions.length > 0 ? cloudContributions : localContributions;
-          const nextPortfolio = cloudPortfolio.length > 0 ? cloudPortfolio : localPortfolio;
+          const nextPortfolio = cloudPortfolio;
           setGoals(nextGoals);
           setContributions(nextContributions);
           setPortfolio(nextPortfolio);
@@ -129,7 +131,7 @@ export default function GoalsPage() {
           if (!isMounted) return;
           setGoals(localGoals);
           setContributions(localContributions);
-          setPortfolio(localPortfolio);
+          setPortfolio(user ? [] : localPortfolio);
           setAprMoneyMarketFund(localApr);
           setSyncMessage(
             error instanceof Error
@@ -145,7 +147,7 @@ export default function GoalsPage() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthLoading, user]);
+  }, [isAuthLoading, isConfigured, user]);
 
   useEffect(() => {
     if (!isHydrated) return;

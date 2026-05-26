@@ -15,7 +15,7 @@ import type {
 import { LoadingState } from "@/components/AppState";
 import { useAuth } from "@/components/AuthProvider";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
-import { loadCloudAlertRules, saveCloudAlertRules } from "@/lib/supabase/sync";
+import { loadCloudAlertRules, loadCloudPortfolio, saveCloudAlertRules } from "@/lib/supabase/sync";
 import { nonNegativeNumber } from "@/lib/utils/format";
 import { checkAllAlerts, createNotificationsFromAlerts } from "@/lib/alerts/checkAlerts";
 import {
@@ -43,7 +43,7 @@ const ALERT_TYPE_LABELS: Record<AlertType, string> = {
 };
 
 export default function AlertsPage() {
-  const { isLoading: isAuthLoading, user } = useAuth();
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -86,7 +86,7 @@ export default function AlertsPage() {
           localArahDanaStorage.readGoalContributions(),
         ];
         const storedSettings = normalizeAlertSettings(localArahDanaStorage.readSettings());
-        const localPortfolio = storedPortfolio ?? [];
+        const localPortfolio = !isConfigured ? (storedPortfolio ?? []) : [];
         const localWatchlist = storedWatchlist ?? [];
         const localAnalysisResults = storedAnalysisResults ?? [];
         const localGoals = storedGoals ?? [];
@@ -115,23 +115,39 @@ export default function AlertsPage() {
         }
 
         try {
-          const cloudRules = await loadCloudAlertRules(user);
+          const [cloudRules, cloudPortfolio] = await Promise.all([
+            loadCloudAlertRules(user),
+            loadCloudPortfolio(user),
+          ]);
           if (!isMounted) return;
           const nextRules = cloudRules.length > 0 ? cloudRules : storedRules ?? [];
           setAlertRules(nextRules);
+          setPortfolio(cloudPortfolio);
+          setSmartAlerts(
+            generateSmartAlerts({
+              portfolio: cloudPortfolio,
+              watchlist: localWatchlist,
+              analysisResults: localAnalysisResults,
+              goals: localGoals,
+              goalContributions: localGoalContributions,
+              settings: storedSettings,
+            }),
+          );
           localArahDanaStorage.writeAlertRules(nextRules);
+          localArahDanaStorage.writePortfolio(cloudPortfolio);
         } catch (error) {
           if (!isMounted) return;
-          setAlertRules(storedRules ?? []);
+          setAlertRules(user ? [] : (storedRules ?? []));
+          setPortfolio([]);
           console.error("Failed to load cloud alert rules:", error);
         } finally {
-          setPortfolio(localPortfolio);
+          if (!user) setPortfolio(localPortfolio);
           setWatchlist(localWatchlist);
           setAnalysisResults(localAnalysisResults);
           setGoals(localGoals);
           setGoalContributions(localGoalContributions);
           setSettings(storedSettings);
-          setSmartAlerts(localSmartAlerts);
+          if (!user) setSmartAlerts(localSmartAlerts);
           if (isMounted) setIsHydrated(true);
         }
       })();
@@ -140,13 +156,18 @@ export default function AlertsPage() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthLoading, user]);
+  }, [isAuthLoading, isConfigured, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
 
     function handlePortfolioPricesUpdated() {
-      const latestPortfolio = localArahDanaStorage.readPortfolio() ?? [];
+      const latestPortfolio =
+        user
+          ? (localArahDanaStorage.readPortfolio() ?? [])
+          : !isConfigured
+            ? (localArahDanaStorage.readPortfolio() ?? [])
+            : [];
       const latestSettings = normalizeAlertSettings(localArahDanaStorage.readSettings());
       setPortfolio(latestPortfolio);
       setSettings(latestSettings);
@@ -162,11 +183,13 @@ export default function AlertsPage() {
       );
     }
 
+    window.addEventListener("arahdana:portfolio-updated", handlePortfolioPricesUpdated);
     window.addEventListener("arahdana:portfolio-prices-updated", handlePortfolioPricesUpdated);
     return () => {
+      window.removeEventListener("arahdana:portfolio-updated", handlePortfolioPricesUpdated);
       window.removeEventListener("arahdana:portfolio-prices-updated", handlePortfolioPricesUpdated);
     };
-  }, [analysisResults, goals, goalContributions, isHydrated, watchlist]);
+  }, [analysisResults, goals, goalContributions, isConfigured, isHydrated, user, watchlist]);
 
   useEffect(() => {
     if (!isHydrated || alertMode !== "auto" || isChecking) return;
@@ -265,7 +288,12 @@ export default function AlertsPage() {
     setCheckError("");
 
     try {
-      const latestPortfolio = localArahDanaStorage.readPortfolio() ?? portfolio;
+      const latestPortfolio =
+        user
+          ? await loadCloudPortfolio(user).catch(() => [])
+          : !isConfigured
+            ? (localArahDanaStorage.readPortfolio() ?? portfolio)
+            : [];
       const latestWatchlist = localArahDanaStorage.readWatchlist() ?? watchlist;
       const latestAnalysisResults =
         localArahDanaStorage.readAnalysisResults() ?? analysisResults;

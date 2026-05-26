@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/proxy";
+import { DEFAULT_AUTHENTICATED_PATH, isAppPath, normalizeAppPath } from "@/lib/routes";
 
 const publicPaths = new Set([
   "/",
@@ -45,7 +46,8 @@ export async function proxy(request: NextRequest) {
   const isApiRoute = pathname.startsWith("/api/");
 
   if (authPaths.has(pathname) && user) {
-    return redirectWithCookies(new URL("/dashboard", request.url), response);
+    const next = normalizeAppPath(request.nextUrl.searchParams.get("next"));
+    return redirectWithCookies(new URL(next, request.url), response);
   }
 
   const isListedProtected = protectedPrefixes.some(
@@ -55,7 +57,10 @@ export async function proxy(request: NextRequest) {
 
   if (isProtected && !user) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    const nextPath = isAppPath(pathname)
+      ? `${pathname}${request.nextUrl.search}`
+      : DEFAULT_AUTHENTICATED_PATH;
+    loginUrl.searchParams.set("next", nextPath);
     return redirectWithCookies(loginUrl, response);
   }
 

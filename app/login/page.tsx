@@ -17,6 +17,7 @@ import {
   signInWithGoogle,
   signInWithPassword,
 } from "@/lib/supabase/auth";
+import { DEFAULT_AUTHENTICATED_PATH, normalizeAppPath } from "@/lib/routes";
 
 type Status = {
   tone: "success" | "error" | "info";
@@ -31,13 +32,13 @@ export default function LoginPage() {
   const [rememberSession, setRememberSession] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
-  const [nextPath, setNextPath] = useState("/dashboard");
+  const [nextPath, setNextPath] = useState(DEFAULT_AUTHENTICATED_PATH);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       const next = params.get("next");
-      if (next?.startsWith("/") && !next.startsWith("//")) setNextPath(next);
+      setNextPath(normalizeAppPath(next));
 
       if (params.get("error")) {
         setStatus({

@@ -18,14 +18,12 @@ import {
 } from "@/lib/supabase/auth";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
-  getArahDanaStorageUser,
+  clearLegacyPortfolioStorage,
   setArahDanaStorageUser,
 } from "@/lib/storage/localStorage";
 import {
   hasUserFinancialData,
   loadCloudUserData,
-  readLocalUserDataSnapshot,
-  syncUserDataSnapshotToCloud,
   writeUserDataSnapshotToLocal,
 } from "@/lib/supabase/sync";
 
@@ -55,10 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setIsLoading(true);
-    const previousStorageUser = getArahDanaStorageUser();
-    const preLoginLocalSnapshot = previousStorageUser
-      ? null
-      : readLocalUserDataSnapshot();
+    clearLegacyPortfolioStorage();
     try {
       const currentUser = await getCurrentUser();
       setArahDanaStorageUser(currentUser?.id ?? null);
@@ -81,15 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const scopedLocalSnapshot = readLocalUserDataSnapshot();
-        const migrationSnapshot = hasUserFinancialData(scopedLocalSnapshot)
-          ? scopedLocalSnapshot
-          : preLoginLocalSnapshot && hasUserFinancialData(preLoginLocalSnapshot)
-            ? preLoginLocalSnapshot
-            : cloudSnapshot;
-
-        writeUserDataSnapshotToLocal(migrationSnapshot);
-        await syncUserDataSnapshotToCloud(currentUser, migrationSnapshot);
+        writeUserDataSnapshotToLocal(cloudSnapshot);
       } catch {
         // If cloud sync is temporarily unavailable, local user-scoped data remains isolated.
       }

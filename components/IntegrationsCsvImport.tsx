@@ -8,7 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { CsvPortfolioImportSection } from "@/components/CsvPortfolioImportSection";
 
 export function IntegrationsCsvImport() {
-  const { isLoading: isAuthLoading, user } = useAuth();
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [hasStoredPortfolio, setHasStoredPortfolio] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Menyiapkan import...");
@@ -18,37 +18,41 @@ export function IntegrationsCsvImport() {
 
     let isMounted = true;
     void (async () => {
-      const saved = localArahDanaStorage.readPortfolio();
+      const saved = !isConfigured ? localArahDanaStorage.readPortfolio() : null;
       const localItems = Array.isArray(saved) ? saved : [];
 
       if (!user) {
         if (!isMounted) return;
         setItems(localItems);
         setHasStoredPortfolio(Array.isArray(saved));
-        setStatusMessage("Data akan disimpan aman di perangkat ini.");
+        setStatusMessage(
+          isConfigured
+            ? "Login untuk menyimpan import ke akun."
+            : "Data akan disimpan aman di perangkat ini.",
+        );
         return;
       }
 
       try {
         const cloudItems = await loadCloudPortfolio(user);
         if (!isMounted) return;
-        const nextItems = cloudItems.length > 0 ? cloudItems : localItems;
+        const nextItems = cloudItems;
         setItems(nextItems);
-        setHasStoredPortfolio(true);
+        setHasStoredPortfolio(nextItems.length > 0);
         localArahDanaStorage.writePortfolio(nextItems);
         setStatusMessage(
-          cloudItems.length > 0
+          nextItems.length > 0
             ? "Data pembanding siap."
             : "Portofolio siap dibuat dari file pertamamu.",
         );
       } catch (error) {
         if (!isMounted) return;
-        setItems(localItems);
-        setHasStoredPortfolio(Array.isArray(saved));
+        setItems([]);
+        setHasStoredPortfolio(false);
         setStatusMessage(
           error instanceof Error
-            ? `Data tetap aman di perangkat ini. ${error.message}`
-            : "Data tetap aman di perangkat ini.",
+            ? `Portofolio akun belum bisa dimuat. ${error.message}`
+            : "Portofolio akun belum bisa dimuat.",
         );
       }
     })();
@@ -56,9 +60,14 @@ export function IntegrationsCsvImport() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthLoading, user]);
+  }, [isAuthLoading, isConfigured, user]);
 
   async function saveImportedItems(nextItems: PortfolioItem[]) {
+    if (!user && isConfigured) {
+      setStatusMessage("Login untuk menyimpan import ke akun.");
+      return;
+    }
+
     localArahDanaStorage.writePortfolio(nextItems);
 
     if (user) {

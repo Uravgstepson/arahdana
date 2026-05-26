@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FlowPanel,
   FocusedFlowShell,
   StickyFlowActions,
 } from "@/components/FocusedFlow";
+import { LoadingState } from "@/components/AppState";
 import { Button, ButtonLink } from "@/components/ui";
+import { useAuth } from "@/components/AuthProvider";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import type { PortfolioItem } from "@/lib/types/investment";
 import { formatRupiah } from "@/lib/utils/format";
+import { loadCloudPortfolio, saveCloudPortfolio } from "@/lib/supabase/sync";
 import {
   draftToPortfolioItem,
   portfolioItemToDraft,
@@ -27,21 +30,53 @@ type EditState = {
 };
 
 export default function PortoEditPage() {
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [state, setState] = useState<EditState>(() => {
     const id =
       typeof window === "undefined"
         ? ""
         : new URLSearchParams(window.location.search).get("id") ?? "";
-    const items = localArahDanaStorage.readPortfolio() ?? [];
-    const item = items.find((holding) => holding.id === id);
     return {
       id,
-      items,
-      draft: item ? portfolioItemToDraft(item) : null,
+      items: [],
+      draft: null,
     };
   });
   const [error, setError] = useState("");
   const [isSaved, setIsSaved] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    let isMounted = true;
+
+    void (async () => {
+      try {
+        const items = user
+          ? await loadCloudPortfolio(user)
+          : !isConfigured
+            ? (localArahDanaStorage.readPortfolio() ?? [])
+            : [];
+        const item = items.find((holding) => holding.id === state.id);
+        if (!isMounted) return;
+        setState((current) => ({
+          ...current,
+          items,
+          draft: item ? portfolioItemToDraft(item) : null,
+        }));
+        if (user) localArahDanaStorage.writePortfolio(items);
+      } catch {
+        if (!isMounted) return;
+        setState((current) => ({ ...current, items: [], draft: null }));
+      } finally {
+        if (isMounted) setIsHydrated(true);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, isConfigured, state.id, user]);
 
   const preview = useMemo(() => {
     if (!state.draft) return null;
@@ -60,7 +95,7 @@ export default function PortoEditPage() {
     setError("");
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!state.draft) return;
     const validation = validateHoldingDraft(state.draft);
     if (validation) {
@@ -68,13 +103,43 @@ export default function PortoEditPage() {
       return;
     }
 
-    const nextItem = draftToPortfolioItem(state.draft, state.id);
-    const nextItems = state.items.map((item) =>
-      item.id === state.id ? nextItem : item,
+    try {
+      if (!user && isConfigured) {
+        throw new Error("Login dulu untuk menyimpan portofolio akun.");
+      }
+      const currentItems = user
+        ? await loadCloudPortfolio(user)
+        : localArahDanaStorage.readPortfolio() ?? state.items;
+      const nextItem = draftToPortfolioItem(state.draft, state.id);
+      const nextItems = currentItems.map((item) =>
+        item.id === state.id ? nextItem : item,
+      );
+      localArahDanaStorage.writePortfolio(nextItems);
+      if (user) {
+        await saveCloudPortfolio(user, nextItems);
+        const freshItems = await loadCloudPortfolio(user);
+        localArahDanaStorage.writePortfolio(freshItems);
+        setState((current) => ({ ...current, items: freshItems }));
+      } else {
+        setState((current) => ({ ...current, items: nextItems }));
+      }
+      setIsSaved(true);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Perubahan belum bisa disimpan.",
+      );
+    }
+  }
+
+  if (!isHydrated) {
+    return (
+      <LoadingState
+        title="Memuat holding"
+        message="Menyiapkan data portofolio akun."
+      />
     );
-    localArahDanaStorage.writePortfolio(nextItems);
-    setState((current) => ({ ...current, items: nextItems }));
-    setIsSaved(true);
   }
 
   if (!state.draft) {

@@ -384,7 +384,6 @@ function BottomLink({
       className={bottomClass(active)}
     >
       <NavGlyph icon={icon} />
-      <span className="truncate">{label}</span>
     </Link>
   );
 }
@@ -408,7 +407,6 @@ function BottomButton({
       className={bottomClass(active)}
     >
       <NavGlyph icon={icon} />
-      <span className="truncate">{label}</span>
     </button>
   );
 }
@@ -424,10 +422,10 @@ function railClass(active: boolean) {
 
 function bottomClass(active: boolean) {
   return cn(
-    "motion-link flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-[1rem] px-1 text-[0.68rem] font-semibold transition-all",
+    "motion-link relative grid min-h-12 min-w-0 place-items-center rounded-[1rem] text-stone-400 outline-none transition-[color,transform,opacity] duration-200 ease-out before:absolute before:left-1/2 before:top-1/2 before:h-9 before:w-9 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-emerald-300/12 before:opacity-0 before:blur-[2px] before:transition-opacity before:duration-200 before:ease-out after:absolute after:bottom-1.5 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300 after:opacity-0 after:transition-opacity after:duration-200 after:ease-out hover:-translate-y-0.5 hover:text-emerald-200 hover:before:opacity-100 active:translate-y-0 active:scale-[0.95] focus-visible:ring-2 focus-visible:ring-emerald-300/45 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-950/70",
     active
-      ? "bg-white/10 text-emerald-200 ring-1 ring-white/10 shadow-[0_10px_24px_rgba(16,185,129,0.12)]"
-      : "text-stone-400 active:bg-white/8",
+      ? "text-emerald-200 before:opacity-100 after:opacity-100"
+      : "hover:after:opacity-0",
   );
 }
 

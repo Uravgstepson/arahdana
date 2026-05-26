@@ -73,7 +73,7 @@ type HomeInsight = {
 };
 
 export default function DashboardPage() {
-  const { isLoading: isAuthLoading, profile, user } = useAuth();
+  const { isConfigured, isLoading: isAuthLoading, profile, user } = useAuth();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [analysisResults, setAnalysisResults] = useState<SavedAnalysisResult[]>(
@@ -95,7 +95,6 @@ export default function DashboardPage() {
 
     window.setTimeout(() => {
       void (async () => {
-        const storedPortfolio = localArahDanaStorage.readPortfolio();
         const storedWatchlist = localArahDanaStorage.readWatchlist();
         const storedSettings = localArahDanaStorage.readSettings();
         const storedAnalysisResults =
@@ -104,9 +103,12 @@ export default function DashboardPage() {
         const storedGoals = localArahDanaStorage.readGoals();
         const storedGoalContributions =
           localArahDanaStorage.readGoalContributions();
-        const localPortfolio = Array.isArray(storedPortfolio)
-          ? storedPortfolio.map(normalizePortfolioItem)
-          : [];
+        const localPortfolio =
+          !isConfigured && !user && !isAuthLoading
+            ? (localArahDanaStorage.readPortfolio() ?? []).map(
+                normalizePortfolioItem,
+              )
+            : [];
         const localWatchlist = Array.isArray(storedWatchlist)
           ? storedWatchlist
           : [];
@@ -157,8 +159,7 @@ export default function DashboardPage() {
               loadCloudSettings(user),
             ]);
           if (!isMounted) return;
-          const nextPortfolio =
-            cloudPortfolio.length > 0 ? cloudPortfolio : localPortfolio;
+          const nextPortfolio = cloudPortfolio.map(normalizePortfolioItem);
           const nextWatchlist =
             cloudWatchlist.length > 0 ? cloudWatchlist : localWatchlist;
           setPortfolio(nextPortfolio);
@@ -195,7 +196,7 @@ export default function DashboardPage() {
           }
         } catch {
           if (!isMounted) return;
-          setPortfolio(localPortfolio);
+          setPortfolio(user ? [] : localPortfolio);
           setWatchlist(localWatchlist);
           setAnalysisResults(localAnalysisResults);
           setNotifications(localNotifications);
@@ -225,19 +226,29 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthLoading, user]);
+  }, [isAuthLoading, isConfigured, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
 
     function handlePortfolioPricesUpdated() {
       const latestPortfolio = localArahDanaStorage.readPortfolio();
-      if (Array.isArray(latestPortfolio)) {
+      if (Array.isArray(latestPortfolio) && (user || !isConfigured)) {
         setPortfolio(latestPortfolio.map(normalizePortfolioItem));
+      } else if (!user) {
+        setPortfolio([]);
       }
       setNotifications(localArahDanaStorage.readNotifications() ?? []);
     }
 
+    window.addEventListener(
+      "arahdana:portfolio-updated",
+      handlePortfolioPricesUpdated,
+    );
+    window.addEventListener(
+      "arahdana:dashboard-summary-updated",
+      handlePortfolioPricesUpdated,
+    );
     window.addEventListener(
       "arahdana:portfolio-prices-updated",
       handlePortfolioPricesUpdated,
@@ -248,6 +259,14 @@ export default function DashboardPage() {
     );
     return () => {
       window.removeEventListener(
+        "arahdana:portfolio-updated",
+        handlePortfolioPricesUpdated,
+      );
+      window.removeEventListener(
+        "arahdana:dashboard-summary-updated",
+        handlePortfolioPricesUpdated,
+      );
+      window.removeEventListener(
         "arahdana:portfolio-prices-updated",
         handlePortfolioPricesUpdated,
       );
@@ -256,7 +275,7 @@ export default function DashboardPage() {
         handlePortfolioPricesUpdated,
       );
     };
-  }, [isHydrated]);
+  }, [isConfigured, isHydrated, user]);
 
   const metrics = useMemo(
     () => calculateDashboardMetrics(portfolio, aprMoneyMarketFund),
@@ -296,8 +315,6 @@ export default function DashboardPage() {
   return (
     <div className="section-stack">
       <HomeGreetingCard greeting={greeting} />
-
-      <HomeInsightCarousel insights={insights} />
 
       <section className="premium-gradient-surface overflow-hidden rounded-[1.55rem] p-5 text-white sm:p-6">
         <div className="flex items-center justify-between gap-3">
@@ -514,6 +531,8 @@ export default function DashboardPage() {
           </Link>
         </section>
       ) : null}
+
+      <HomeInsightCarousel insights={insights} />
     </div>
   );
 }

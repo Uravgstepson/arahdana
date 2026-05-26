@@ -15,6 +15,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import { signOut } from "@/lib/supabase/auth";
+import { normalizeAppPath } from "@/lib/routes";
 import { cn } from "@/lib/utils/format";
 import { usePerformanceMode } from "@/lib/utils/performanceMode";
 import {
@@ -105,7 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     const loginUrl = new URL("/login", window.location.origin);
-    loginUrl.searchParams.set("next", pathname);
+    loginUrl.searchParams.set("next", normalizeAppPath(pathname));
     router.replace(`${loginUrl.pathname}${loginUrl.search}`);
   }, [
     auth.isConfigured,
@@ -129,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen text-stone-950">
         <ToastViewport />
-        <main className="relative mx-auto min-h-screen w-full max-w-3xl px-4 pt-[calc(env(safe-area-inset-top)+6rem)]">
+        <main className="relative mx-auto min-h-screen w-full max-w-3xl px-4 pt-[calc(env(safe-area-inset-top)+7.5rem)]">
           <LoadingState
             title="Memuat akun"
             message="Menyiapkan sesi dan data akun kamu."
@@ -145,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AutoPriceRefresh />
       <NotificationManager />
       <ToastViewport />
-      <main className="relative mx-auto min-h-screen w-full min-w-0 max-w-7xl overflow-x-clip px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+6rem)] sm:px-5 lg:pb-8 lg:pl-32 lg:pr-6 lg:pt-0">
+      <main className="relative mx-auto min-h-screen w-full min-w-0 max-w-7xl overflow-x-clip px-4 pb-[calc(9rem+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+7.5rem)] scroll-pb-[calc(9rem+env(safe-area-inset-bottom))] sm:px-5 lg:pb-8 lg:pl-32 lg:pr-6 lg:pt-0">
         <div className="top-atmosphere" aria-hidden="true" />
         <header className="app-header fixed inset-x-4 top-[calc(env(safe-area-inset-top)+0.9rem)] z-50 h-12 pointer-events-none sm:inset-x-5 lg:static lg:mb-8 lg:grid lg:h-auto lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-2.5 lg:pb-7 lg:pt-7">
           <div className="app-header-title-zone pointer-events-auto fixed left-4 top-[calc(env(safe-area-inset-top)+0.9rem)] z-10 flex h-12 w-[min(12.75rem,calc(100vw-8rem))] items-center justify-center px-3 sm:left-5 sm:w-[14rem] sm:px-4 lg:static lg:w-full lg:max-w-[14rem]">

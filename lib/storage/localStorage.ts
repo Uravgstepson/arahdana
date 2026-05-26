@@ -39,6 +39,17 @@ const USER_SCOPED_KEYS = new Set<string>([
 ]);
 
 const ACTIVE_USER_KEY = "arahdana.activeUserId";
+const LEGACY_PORTFOLIO_KEYS = [
+  "portfolio",
+  "holdings",
+  "arahDanaPortfolio",
+  "arahDanaHoldings",
+  "demoPortfolio",
+  "localPortfolio",
+  "investmentData",
+  "portfolioSummary",
+  "dashboardSummary",
+];
 let activeUserId: string | null = null;
 let storageWriteEventsPaused = false;
 
@@ -65,6 +76,21 @@ export function clearArahDanaRuntimeState() {
   setArahDanaStorageUser(null);
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event("arahdana:auth-signed-out"));
+}
+
+export function clearLegacyPortfolioStorage() {
+  if (typeof window === "undefined") return;
+  LEGACY_PORTFOLIO_KEYS.forEach((key) => window.localStorage.removeItem(key));
+}
+
+export function dispatchPortfolioDataInvalidated() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("arahdana:portfolio-updated"));
+  window.dispatchEvent(new Event("arahdana:dashboard-summary-updated"));
+  window.dispatchEvent(new Event("arahdana:analysis-summary-updated"));
+  window.dispatchEvent(new Event("arahdana:portfolio-summary-updated"));
+  window.dispatchEvent(new Event("arahdana:settings-derived-values-updated"));
+  window.dispatchEvent(new Event("arahdana:portfolio-prices-updated"));
 }
 
 export type ArahDanaStorageAdapter = {
@@ -200,6 +226,13 @@ function writeJson<T>(key: string, value: T) {
         },
       }),
     );
+    if (key === STORAGE_KEYS.portfolio) {
+      dispatchPortfolioDataInvalidated();
+    }
+    if (key === STORAGE_KEYS.reports) {
+      window.dispatchEvent(new Event("arahdana:portfolio-summary-updated"));
+      window.dispatchEvent(new Event("arahdana:dashboard-summary-updated"));
+    }
   }
 }
 

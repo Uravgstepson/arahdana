@@ -40,6 +40,7 @@ import { computePortfolioCurrentPrice } from "@/lib/portfolio/valuation";
 import {
   loadCloudAlertRules,
   loadCloudPortfolio,
+  resetPortfolioForCurrentUser,
   saveCloudPortfolio,
 } from "@/lib/supabase/sync";
 import { normalizeSafeTicker, validateTicker } from "@/lib/validation";
@@ -59,6 +60,7 @@ export function PortfolioTable() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState("");
   const [refreshError, setRefreshError] = useState("");
   const [syncMessage, setSyncMessage] = useState("Menyiapkan data...");
@@ -70,11 +72,7 @@ export function PortfolioTable() {
     let isMounted = true;
     window.setTimeout(() => {
       void (async () => {
-        const saved = localArahDanaStorage.readPortfolio();
         const storedAlertRules = localArahDanaStorage.readAlertRules() ?? [];
-        const storedItems = Array.isArray(saved)
-          ? normalizePortfolioItems(saved)
-          : null;
 
         const settings = localArahDanaStorage.readSettings();
         if (
@@ -89,9 +87,16 @@ export function PortfolioTable() {
         }
         if (!user) {
           if (!isMounted) return;
-          setItems(storedItems ?? []);
+          const localModeItems = !isConfigured
+            ? normalizePortfolioItems(localArahDanaStorage.readPortfolio() ?? [])
+            : [];
+          setItems(localModeItems);
           setAlertRules(storedAlertRules);
-          setSyncMessage("Data tersimpan di perangkat ini.");
+          setSyncMessage(
+            isConfigured
+              ? "Login untuk memuat portofolio akun."
+              : "Mode lokal aktif. Data tersimpan di perangkat ini.",
+          );
           setIsHydrated(true);
           return;
         }
@@ -102,26 +107,25 @@ export function PortfolioTable() {
             () => storedAlertRules,
           );
           if (!isMounted) return;
-          const nextItems =
-            cloudItems.length > 0 ? cloudItems : (storedItems ?? []);
+          const nextItems = normalizePortfolioItems(cloudItems);
           setItems(nextItems);
           setAlertRules(
             cloudAlertRules.length > 0 ? cloudAlertRules : storedAlertRules,
           );
           localArahDanaStorage.writePortfolio(nextItems);
           setSyncMessage(
-            cloudItems.length > 0
+            nextItems.length > 0
               ? "Data aman dan siap dipakai."
-              : "Portofolio siap. Data baru akan dijaga otomatis.",
+              : "Portofolio akun masih kosong.",
           );
         } catch (error) {
           if (!isMounted) return;
-          setItems(storedItems ?? []);
+          setItems([]);
           setAlertRules(storedAlertRules);
           setSyncMessage(
             error instanceof Error
-              ? `Data tetap aman di perangkat ini. ${error.message}`
-              : "Data tetap aman di perangkat ini.",
+              ? `Portofolio akun belum bisa dimuat. ${error.message}`
+              : "Portofolio akun belum bisa dimuat.",
           );
         } finally {
           if (isMounted) setIsHydrated(true);
@@ -131,25 +135,7 @@ export function PortfolioTable() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthLoading, user]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    localArahDanaStorage.writePortfolio(items);
-    if (!user) return;
-
-    void saveCloudPortfolio(user, items)
-      .then(() => {
-        setSyncMessage("Portofolio siap.");
-      })
-      .catch((error) => {
-        setSyncMessage(
-          error instanceof Error
-            ? `Data tersimpan di perangkat ini. ${error.message}`
-            : "Data tersimpan di perangkat ini.",
-        );
-      });
-  }, [isHydrated, items, user]);
+  }, [isAuthLoading, isConfigured, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -162,7 +148,7 @@ export function PortfolioTable() {
     function handleAutoRefreshDone(event: Event) {
       setIsAutoRefreshing(false);
       const latestItems = localArahDanaStorage.readPortfolio();
-      if (latestItems) {
+      if (latestItems && (!isConfigured || user)) {
         setItems(normalizePortfolioItems(latestItems));
       }
       const detail = event instanceof CustomEvent ? event.detail : null;
@@ -203,7 +189,7 @@ export function PortfolioTable() {
         handleAutoRefreshDone,
       );
     };
-  }, [isHydrated]);
+  }, [isConfigured, isHydrated, user]);
 
   const totals = useMemo(() => {
     const summary = items.reduce(
@@ -280,8 +266,72 @@ export function PortfolioTable() {
     );
   }
 
+  async function commitPortfolio(nextItems: PortfolioItem[], successMessage = "Portofolio siap.") {
+    const normalizedItems = normalizePortfolioItems(nextItems);
+    setItems(normalizedItems);
+    localArahDanaStorage.writePortfolio(normalizedItems);
+
+    if (!isConfigured) {
+      setSyncMessage("Mode lokal aktif. Data tersimpan di perangkat ini.");
+      return;
+    }
+
+    if (!user) {
+      setSyncMessage("Login untuk menyimpan portofolio akun.");
+      return;
+    }
+
+    try {
+      await saveCloudPortfolio(user, normalizedItems);
+      const freshItems = normalizePortfolioItems(await loadCloudPortfolio(user));
+      setItems(freshItems);
+      localArahDanaStorage.writePortfolio(freshItems);
+      setSyncMessage(successMessage);
+    } catch (error) {
+      setSyncMessage(
+        error instanceof Error
+          ? `Perubahan lokal belum tersinkron. ${error.message}`
+          : "Perubahan lokal belum tersinkron.",
+      );
+    }
+  }
+
   function deleteItem(id: string) {
-    setItems((current) => current.filter((item) => item.id !== id));
+    void commitPortfolio(
+      items.filter((item) => item.id !== id),
+      "Holding dihapus dari portofolio akun.",
+    );
+  }
+
+  async function resetPortfolio() {
+    if (items.length === 0 || isResetting) return;
+    const confirmed = window.confirm(
+      "Reset semua holding dan laporan portofolio tersimpan?",
+    );
+    if (!confirmed) return;
+
+    setIsResetting(true);
+    setManagedHolding(null);
+    setRefreshMessage("");
+    setRefreshError("");
+
+    try {
+      setItems([]);
+      await resetPortfolioForCurrentUser(user, { isConfigured });
+      setSyncMessage(
+        user
+          ? "Portofolio akun sudah direset."
+          : "Mode lokal aktif. Portofolio sudah direset.",
+      );
+    } catch (error) {
+      setSyncMessage(
+        error instanceof Error
+          ? `Reset belum selesai. ${error.message}`
+          : "Reset belum selesai.",
+      );
+    } finally {
+      setIsResetting(false);
+    }
   }
 
   async function refreshPrices() {
@@ -347,18 +397,17 @@ export function PortfolioTable() {
       });
 
       if (updates.size > 0) {
-        setItems((current) =>
-          current.map((item) => {
+        const nextItems = items.map((item) => {
             const update = updates.get(item.id);
             if (!update) return item;
             return {
               ...item,
               currentPrice: update.latestClose,
-              dataSource: "live_public_market_data",
+              dataSource: "live_public_market_data" as const,
               lastPriceUpdatedAt: update.updatedAt,
             };
-          }),
-        );
+          });
+        void commitPortfolio(nextItems, "Harga portofolio diperbarui.");
       }
 
       setRefreshMessage(
@@ -482,8 +531,30 @@ export function PortfolioTable() {
             <ButtonLink href="/porto/manage" variant="secondary">
               Manage
             </ButtonLink>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={resetPortfolio}
+              disabled={items.length === 0 || isResetting}
+            >
+              {isResetting ? "Reset..." : "Reset"}
+            </Button>
           </div>
         </div>
+        {items.length === 0 ? (
+          <div className="mt-4 rounded-[1.2rem] border border-dashed border-stone-300 bg-stone-50 p-5 text-center">
+            <h3 className="font-semibold text-stone-950">
+              Portofolio masih kosong
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-stone-600">
+              Tambahkan holding pertama. Data lama dari cache lokal tidak akan
+              mengisi ulang halaman ini.
+            </p>
+            <ButtonLink href="/porto/add" variant="primary" className="mt-4">
+              Tambah holding
+            </ButtonLink>
+          </div>
+        ) : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <PerformerSummary
             title="Top gainer"

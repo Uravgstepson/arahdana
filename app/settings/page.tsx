@@ -22,7 +22,6 @@ import { LoadingState } from "@/components/AppState";
 import { useAuth } from "@/components/AuthProvider";
 import { InstrumentOptions } from "@/components/PortfolioTable";
 import { PrivateValue } from "@/components/PrivateValue";
-import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
 import { localArahDanaStorage } from "@/lib/storage/localStorage";
 import {
@@ -33,6 +32,7 @@ import {
 } from "@/lib/utils/backup";
 import {
   loadCloudSettings,
+  resetPortfolioForCurrentUser,
   saveCloudSettings,
 } from "@/lib/supabase/sync";
 import { normalizeLanguage } from "@/lib/i18n";
@@ -53,7 +53,7 @@ const defaults = DEFAULT_USER_SETTINGS;
 const THEME_KEY = "arahdana.theme";
 
 export default function SettingsPage() {
-  const { isLoading: isAuthLoading, user } = useAuth();
+  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
   const [settings, setSettings] = useState<UserSettings>(defaults);
   const [preferred, setPreferred] = useState<InvestmentType>("stock");
   const [clearStatus, setClearStatus] = useState("");
@@ -98,7 +98,7 @@ export default function SettingsPage() {
           setSettings(localSettings);
           setCloudSyncStatus({
             tone: "info",
-            message: "Data aman di perangkat ini.",
+            message: "Data aman.",
           });
           setIsHydrated(true);
           return;
@@ -112,9 +112,7 @@ export default function SettingsPage() {
           localArahDanaStorage.writeSettings(nextSettings);
           setCloudSyncStatus({
             tone: "success",
-            message: cloudSettings
-              ? "Pengaturan siap dan terjaga."
-              : "Pengaturan siap. Perubahan baru akan dijaga otomatis.",
+            message: "Pengaturan tersimpan.",
           });
         } catch (error) {
           if (!isMounted) return;
@@ -123,8 +121,8 @@ export default function SettingsPage() {
             tone: "error",
             message:
               error instanceof Error
-                ? `Cloud settings gagal dimuat, memakai localStorage. ${error.message}`
-                : "Cloud settings gagal dimuat, memakai localStorage.",
+                ? `Pengaturan belum bisa dimuat. ${error.message}`
+                : "Pengaturan belum bisa dimuat.",
           });
         } finally {
           if (isMounted) setIsHydrated(true);
@@ -158,8 +156,8 @@ export default function SettingsPage() {
           tone: "error",
           message:
             error instanceof Error
-              ? `Pengaturan tersimpan di perangkat ini. ${error.message}`
-              : "Pengaturan tersimpan di perangkat ini.",
+              ? `Pengaturan belum tersinkron. ${error.message}`
+              : "Pengaturan belum tersinkron.",
         });
       });
   }, [isHydrated, settings, user]);
@@ -188,18 +186,25 @@ export default function SettingsPage() {
     setBackupStatus(null);
   }
 
-  function clearAllData() {
+  async function clearAllData() {
     const confirmed = window.confirm(
-      "Hapus semua data lokal ArahDana dari browser ini? Data browser lain tidak akan disentuh.",
+      "Reset data portofolio dan laporan tersimpan?",
     );
     if (!confirmed) return;
 
-    const result = clearArahDanaData();
-    suppressNextSettingsWrite.current = true;
-    setSettings(defaults);
-    setPreferred("stock");
-    setBackupStatus(null);
-    setClearStatus(result.message);
+    try {
+      await resetPortfolioForCurrentUser(user, { isConfigured });
+      const result = !user ? clearArahDanaData() : { ok: true };
+      suppressNextSettingsWrite.current = true;
+      setSettings(defaults);
+      setPreferred("stock");
+      setBackupStatus(null);
+      setClearStatus(result.ok ? "Data sudah direset." : "Reset belum selesai.");
+    } catch (error) {
+      setClearStatus(
+        error instanceof Error ? `Reset belum selesai. ${error.message}` : "Reset belum selesai.",
+      );
+    }
   }
 
   function exportBackup() {
@@ -243,7 +248,7 @@ export default function SettingsPage() {
 
     try {
       const confirmed = window.confirm(
-        "Import backup akan mengganti data ArahDana lokal di browser ini. Lanjutkan?",
+        "Import backup akan mengganti data ArahDana saat ini. Lanjutkan?",
       );
       if (!confirmed) return;
 
@@ -292,14 +297,14 @@ export default function SettingsPage() {
       updateNotificationPreferences({ enabled: true, browserEnabled: true });
       dispatchToast({
         tone: "success",
-        title: "Notifikasi aktif",
-        message: "ArahDana akan mengirim pengingat yang tenang dan terbatas.",
+      title: "Notifikasi aktif",
+      message: "ArahDana akan mengirim pengingat yang tenang dan terbatas.",
       });
       return;
     }
     dispatchToast({
       tone: "warning",
-      title: "Notifikasi browser belum aktif",
+      title: "Notifikasi belum aktif",
       message: "Kamu tetap bisa memakai pusat notifikasi di dalam aplikasi.",
     });
   }
@@ -308,7 +313,7 @@ export default function SettingsPage() {
     return (
       <LoadingState
         title="Memuat pengaturan"
-        message="Mengambil preferensi lokal dan cloud bila akun tersedia."
+        message="Menyiapkan preferensi."
       />
     );
   }
@@ -323,9 +328,9 @@ export default function SettingsPage() {
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">App preferences</h2>
+            <h2 className="text-lg font-semibold">Preferensi</h2>
             <p className="mt-1 text-sm text-stone-500">
-              Mode {user ? "cloud" : "lokal"} - {APP_VERSION_LABEL}
+              Pengaturan tersimpan.
             </p>
           </div>
           <button
@@ -497,7 +502,7 @@ export default function SettingsPage() {
 
       <SectionHeader
         title="Akun"
-        description="Login, logout, status cloud, dan sinkronisasi akun."
+        description="Kelola akun dan sinkronisasi data."
       />
 
       <AccountPanel />
@@ -512,12 +517,12 @@ export default function SettingsPage() {
           Backup & Restore
         </h2>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Data saat ini tersimpan di browser perangkat ini. Export backup secara
-          berkala agar data tidak hilang.
+          Simpan salinan data ArahDana secara berkala agar data mudah
+          dipulihkan.
         </p>
         <div className="mt-4 rounded-lg bg-stone-100 p-4">
           <h3 className="text-sm font-semibold text-stone-950">
-            File backup lokal
+            File backup
           </h3>
           <p className="mt-1 text-sm leading-6 text-stone-600">
             Backup mencakup portofolio, watchlist, pengaturan, dan hasil
@@ -556,9 +561,9 @@ export default function SettingsPage() {
       </section>
 
       <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-stone-950">Data tools</h2>
+        <h2 className="text-lg font-semibold text-stone-950">Alat data</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <SettingsLink href="/portfolio" title="CSV import" />
+          <SettingsLink href="/portfolio" title="Import CSV" />
           <SettingsLink href="/integrations" title="Integrasi" />
           <SettingsLink href="/changelog" title="Changelog" />
           <SettingsLink href="/feedback" title="Feedback beta" />
@@ -568,23 +573,24 @@ export default function SettingsPage() {
       </section>
 
       <SectionHeader
-        title="Danger Zone"
-        description="Reset lokal dan tindakan yang tidak mudah dibatalkan."
+        title="Reset data"
+        description="Hapus data portofolio dan laporan yang tersimpan."
       />
 
       <section className="rounded-lg border border-rose-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-rose-800">
-          Clear local data
+          Reset portofolio
         </h2>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Menghapus data ArahDana di browser ini saja.
+          Menghapus holding dan ringkasan portofolio agar semua halaman kembali
+          ke keadaan kosong.
         </p>
         <button
           type="button"
           onClick={clearAllData}
           className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-800"
         >
-          Clear All Local Data
+          Reset Data
         </button>
         {clearStatus ? (
           <p className="mt-3 text-sm font-medium text-emerald-700">
@@ -648,13 +654,13 @@ function NotificationSettingsSection({
             onClick={onEnableBrowserNotifications}
             className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
           >
-            Enable Notifications
+            Aktifkan notifikasi
           </button>
         ) : null}
       </div>
 
       <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
-        Browser: {browserPermission === "granted" ? "diizinkan" : browserPermission === "denied" ? "ditolak" : browserPermission === "unsupported" ? "tidak didukung" : "belum diminta"}
+        Izin notifikasi: {browserPermission === "granted" ? "aktif" : browserPermission === "denied" ? "ditolak" : browserPermission === "unsupported" ? "tidak didukung" : "belum aktif"}
       </p>
 
       <div className="mt-5 grid gap-4">
@@ -667,7 +673,7 @@ function NotificationSettingsSection({
           />
         </label>
         <label className="flex items-center justify-between gap-3 rounded-[1.1rem] bg-stone-100 p-4 text-sm font-semibold text-stone-700">
-          Browser notifications
+          Notifikasi perangkat
           <input
             type="checkbox"
             checked={preferences.browserEnabled}
@@ -691,7 +697,7 @@ function NotificationSettingsSection({
         </Field>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="flex items-center justify-between gap-3 rounded-[1.1rem] bg-stone-100 p-4 text-sm font-semibold text-stone-700">
-            Quiet mode
+            Mode tenang
             <input
               type="checkbox"
               checked={preferences.quietMode}
