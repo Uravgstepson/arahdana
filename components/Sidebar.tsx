@@ -37,23 +37,17 @@ type FeatureItem = {
 
 const featureMenu: FeatureItem[] = [
   {
-    href: "/portfolio",
-    label: "Porto",
-    labelKey: "portfolio",
-    helper: "Holding dan alokasi",
-    icon: "portfolio",
+    href: "/analyzer",
+    label: "Analysis",
+    labelKey: "analysis",
+    helper: "Analisis aset dan skor keputusan",
+    icon: "analyzer",
   },
   {
-    href: "/market",
-    label: "Market",
-    helper: "Search, pantau, harga, insight",
-    icon: "market",
-  },
-  {
-    href: "/goals",
-    label: "Tujuan / DCA Planner",
-    helper: "Rencana kontribusi berkala",
-    icon: "goals",
+    href: "/review",
+    label: "Review",
+    helper: "Jurnal, laporan, health score",
+    icon: "reports",
   },
   {
     href: "/alerts",
@@ -62,17 +56,9 @@ const featureMenu: FeatureItem[] = [
     helper: "Sinyal risiko dan pengingat",
     icon: "alerts",
   },
-  {
-    href: "/review",
-    label: "Review",
-    helper: "Jurnal, laporan, health score",
-    icon: "reports",
-  },
 ];
 
-const menuRoutes = new Set(
-  featureMenu.map((item) => item.href.split("#")[0]).filter(Boolean),
-);
+const menuRouteBases = ["/analyzer", "/analysis", "/review", "/alerts"];
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -85,7 +71,14 @@ export function Sidebar() {
   const touchStartY = useRef<number | null>(null);
   const bottomNavRef = useRef<HTMLElement | null>(null);
   const [drawerDragY, setDrawerDragY] = useState(0);
-  const isFeatureActive = menuRoutes.has(pathname);
+  const isMenuActive = menuRouteBases.some((base) => isRouteActive(pathname, base));
+  const isPortfolioActive =
+    isRouteActive(pathname, "/portfolio") || isRouteActive(pathname, "/porto");
+  const isMarketActive =
+    isRouteActive(pathname, "/market") ||
+    isRouteActive(pathname, "/market-insight") ||
+    isRouteActive(pathname, "/market-prices");
+  const portfolioLabel = language === "id" ? "Portofolio" : "Portfolio";
 
   useEffect(() => {
     lastScrollY.current = window.scrollY;
@@ -197,17 +190,23 @@ export function Sidebar() {
             icon="home"
             active={pathname === "/dashboard"}
           />
+          <RailLink
+            href="/portfolio"
+            label={portfolioLabel}
+            icon="portfolio"
+            active={isPortfolioActive}
+          />
+          <RailLink
+            href="/market"
+            label="Market"
+            icon="market"
+            active={isMarketActive}
+          />
           <RailButton
             label="Menu"
             icon="menu"
-            active={isFeatureActive || isMenuOpen}
+            active={isMenuActive || isMenuOpen}
             onClick={() => setIsMenuOpen(true)}
-          />
-          <RailLink
-            href="/analyzer"
-            label={translate(language, "analysis")}
-            icon="analyzer"
-            active={pathname === "/analyzer"}
           />
         </nav>
         <p className="writing-vertical hidden text-[0.62rem] font-semibold tracking-[0.18em] text-stone-400 xl:block">
@@ -219,7 +218,7 @@ export function Sidebar() {
         ref={bottomNavRef}
         aria-label="Navigasi utama"
         className={cn(
-          "motion-nav fixed inset-x-5 bottom-[calc(0.85rem+env(safe-area-inset-bottom))] z-50 mx-auto grid max-w-md grid-cols-3 rounded-[1.35rem] border border-white/12 bg-stone-950/76 p-1 shadow-[0_18px_44px_rgba(15,23,42,0.22)] backdrop-blur-[18px] transition-all duration-300 ease-out lg:hidden",
+          "motion-nav fixed inset-x-5 bottom-[calc(0.85rem+env(safe-area-inset-bottom))] z-50 mx-auto grid max-w-md grid-cols-4 rounded-[1.35rem] border border-white/12 bg-stone-950/76 p-1 shadow-[0_18px_44px_rgba(15,23,42,0.22)] backdrop-blur-[18px] transition-all duration-300 ease-out lg:hidden",
           isBottomHidden
             ? "translate-y-28 opacity-80"
             : "translate-y-0 opacity-100",
@@ -231,17 +230,23 @@ export function Sidebar() {
           icon="home"
           active={pathname === "/dashboard"}
         />
+        <BottomLink
+          href="/portfolio"
+          label={portfolioLabel}
+          icon="portfolio"
+          active={isPortfolioActive}
+        />
+        <BottomLink
+          href="/market"
+          label="Market"
+          icon="market"
+          active={isMarketActive}
+        />
         <BottomButton
           label="Menu"
           icon="menu"
-          active={isFeatureActive || isMenuOpen}
+          active={isMenuActive || isMenuOpen}
           onClick={() => setIsMenuOpen(true)}
-        />
-        <BottomLink
-          href="/analyzer"
-          label={translate(language, "analysis")}
-          icon="analyzer"
-          active={pathname === "/analyzer"}
         />
       </nav>
 
@@ -293,7 +298,7 @@ export function Sidebar() {
                   href={item.href}
                   className={cn(
                     "motion-link flex min-h-[4.8rem] items-center gap-3 rounded-[1.35rem] px-4 text-left transition-all 260ms cubic-bezier(0.16,1,0.3,1)",
-                    pathname === item.href.split("#")[0]
+                    isFeatureItemActive(pathname, item.href)
                       ? "bg-emerald-400/20 text-white ring-1 ring-emerald-500/30"
                       : "bg-stone-900/40 text-stone-100 hover:bg-stone-900/60",
                   )}
@@ -384,6 +389,9 @@ function BottomLink({
       className={bottomClass(active)}
     >
       <NavGlyph icon={icon} />
+      <span className="mt-0.5 max-w-full truncate text-[0.64rem] font-semibold leading-none">
+        {label}
+      </span>
     </Link>
   );
 }
@@ -407,6 +415,9 @@ function BottomButton({
       className={bottomClass(active)}
     >
       <NavGlyph icon={icon} />
+      <span className="mt-0.5 max-w-full truncate text-[0.64rem] font-semibold leading-none">
+        {label}
+      </span>
     </button>
   );
 }
@@ -422,10 +433,22 @@ function railClass(active: boolean) {
 
 function bottomClass(active: boolean) {
   return cn(
-    "motion-link relative grid min-h-12 min-w-0 place-items-center rounded-[1rem] text-stone-400 outline-none transition-[color,transform,opacity] duration-200 ease-out before:absolute before:left-1/2 before:top-1/2 before:h-9 before:w-9 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-emerald-300/12 before:opacity-0 before:blur-[2px] before:transition-opacity before:duration-200 before:ease-out after:absolute after:bottom-1.5 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300 after:opacity-0 after:transition-opacity after:duration-200 after:ease-out hover:-translate-y-0.5 hover:text-emerald-200 hover:before:opacity-100 active:translate-y-0 active:scale-[0.95] focus-visible:ring-2 focus-visible:ring-emerald-300/45 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-950/70",
+    "motion-link relative flex min-h-14 min-w-0 flex-col items-center justify-center rounded-[1rem] px-1 text-stone-400 outline-none transition-[color,transform,opacity] duration-200 ease-out before:absolute before:left-1/2 before:top-[1.42rem] before:h-9 before:w-9 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-emerald-300/12 before:opacity-0 before:blur-[2px] before:transition-opacity before:duration-200 before:ease-out after:absolute after:bottom-1.5 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300 after:opacity-0 after:transition-opacity after:duration-200 after:ease-out hover:-translate-y-0.5 hover:text-emerald-200 hover:before:opacity-100 active:translate-y-0 active:scale-[0.95] focus-visible:ring-2 focus-visible:ring-emerald-300/45 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-950/70",
     active
       ? "text-emerald-200 before:opacity-100 after:opacity-100"
       : "hover:after:opacity-0",
+  );
+}
+
+function isRouteActive(pathname: string, basePath: string) {
+  return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
+
+function isFeatureItemActive(pathname: string, href: string) {
+  const basePath = href.split("#")[0] ?? href;
+  return (
+    isRouteActive(pathname, basePath) ||
+    (basePath === "/analyzer" && isRouteActive(pathname, "/analysis"))
   );
 }
 

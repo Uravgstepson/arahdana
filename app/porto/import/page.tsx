@@ -1,5 +1,6 @@
 "use client";
 
+import type { User } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
 import { CsvPortfolioImportSection } from "@/components/CsvPortfolioImportSection";
 import { FlowPanel, FocusedFlowShell } from "@/components/FocusedFlow";
@@ -50,10 +51,12 @@ export default function PortoImportPage() {
         return;
       }
 
-      localArahDanaStorage.writePortfolio(nextItems);
-      if (user) await saveCloudPortfolio(user, nextItems);
-      setItems(nextItems);
-      setHasStoredPortfolio(nextItems.length > 0);
+      const savedItems = user
+        ? await saveAndReloadCloudPortfolio(user, nextItems)
+        : nextItems;
+      localArahDanaStorage.writePortfolio(savedItems);
+      setItems(savedItems);
+      setHasStoredPortfolio(savedItems.length > 0);
       setIsImported(true);
     })().catch((error) => {
       setMessage(
@@ -104,4 +107,12 @@ export default function PortoImportPage() {
       />
     </FocusedFlowShell>
   );
+}
+
+async function saveAndReloadCloudPortfolio(
+  user: User,
+  nextItems: PortfolioItem[],
+) {
+  await saveCloudPortfolio(user, nextItems);
+  return loadCloudPortfolio(user);
 }

@@ -70,14 +70,17 @@ export function IntegrationsCsvImport() {
 
     localArahDanaStorage.writePortfolio(nextItems);
 
+    let savedItems = nextItems;
     if (user) {
       await saveCloudPortfolio(user, nextItems);
+      savedItems = await loadCloudPortfolio(user);
+      localArahDanaStorage.writePortfolio(savedItems);
       setStatusMessage("Import tersimpan dan siap dipakai.");
     } else {
       setStatusMessage("Import tersimpan di perangkat ini.");
     }
 
-    setItems(nextItems);
+    setItems(savedItems);
     setHasStoredPortfolio(true);
   }
 

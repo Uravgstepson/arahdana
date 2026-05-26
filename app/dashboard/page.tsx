@@ -1,7 +1,9 @@
 "use client";
 
+import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import {
   memo,
   type ReactNode,
@@ -74,6 +76,7 @@ type HomeInsight = {
 
 export default function DashboardPage() {
   const { isConfigured, isLoading: isAuthLoading, profile, user } = useAuth();
+  const pathname = usePathname();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [analysisResults, setAnalysisResults] = useState<SavedAnalysisResult[]>(
@@ -93,7 +96,7 @@ export default function DashboardPage() {
     if (isAuthLoading) return;
     let isMounted = true;
 
-    window.setTimeout(() => {
+    const loadTimer = window.setTimeout(() => {
       void (async () => {
         const storedWatchlist = localArahDanaStorage.readWatchlist();
         const storedSettings = localArahDanaStorage.readSettings();
@@ -225,13 +228,15 @@ export default function DashboardPage() {
     }, 0);
     return () => {
       isMounted = false;
+      window.clearTimeout(loadTimer);
     };
   }, [isAuthLoading, isConfigured, user]);
 
   useEffect(() => {
     if (!isHydrated) return;
+    let isMounted = true;
 
-    function handlePortfolioPricesUpdated() {
+    function refreshPortfolioFromSharedCache() {
       const latestPortfolio = localArahDanaStorage.readPortfolio();
       if (Array.isArray(latestPortfolio) && (user || !isConfigured)) {
         setPortfolio(latestPortfolio.map(normalizePortfolioItem));
@@ -241,41 +246,69 @@ export default function DashboardPage() {
       setNotifications(localArahDanaStorage.readNotifications() ?? []);
     }
 
+    async function refreshPortfolioFromCurrentSource() {
+      if (isAuthLoading) return;
+
+      try {
+        const latestPortfolio = await loadPortfolioFromCurrentSource({
+          isConfigured,
+          user,
+        });
+        if (!isMounted) return;
+        setPortfolio(latestPortfolio.map(normalizePortfolioItem));
+      } catch {
+        if (!isMounted) return;
+        refreshPortfolioFromSharedCache();
+        return;
+      }
+
+      setNotifications(localArahDanaStorage.readNotifications() ?? []);
+    }
+
+    function handlePortfolioDataUpdated() {
+      refreshPortfolioFromSharedCache();
+    }
+
+    if (pathname === "/dashboard" || pathname === "/home") {
+      void refreshPortfolioFromCurrentSource();
+    }
+
     window.addEventListener(
       "arahdana:portfolio-updated",
-      handlePortfolioPricesUpdated,
+      handlePortfolioDataUpdated,
     );
     window.addEventListener(
       "arahdana:dashboard-summary-updated",
-      handlePortfolioPricesUpdated,
+      handlePortfolioDataUpdated,
     );
     window.addEventListener(
       "arahdana:portfolio-prices-updated",
-      handlePortfolioPricesUpdated,
+      handlePortfolioDataUpdated,
     );
     window.addEventListener(
       "arahdana:notifications-updated",
-      handlePortfolioPricesUpdated,
+      handlePortfolioDataUpdated,
     );
     return () => {
+      isMounted = false;
       window.removeEventListener(
         "arahdana:portfolio-updated",
-        handlePortfolioPricesUpdated,
+        handlePortfolioDataUpdated,
       );
       window.removeEventListener(
         "arahdana:dashboard-summary-updated",
-        handlePortfolioPricesUpdated,
+        handlePortfolioDataUpdated,
       );
       window.removeEventListener(
         "arahdana:portfolio-prices-updated",
-        handlePortfolioPricesUpdated,
+        handlePortfolioDataUpdated,
       );
       window.removeEventListener(
         "arahdana:notifications-updated",
-        handlePortfolioPricesUpdated,
+        handlePortfolioDataUpdated,
       );
     };
-  }, [isConfigured, isHydrated, user]);
+  }, [isAuthLoading, isConfigured, isHydrated, pathname, user]);
 
   const metrics = useMemo(
     () => calculateDashboardMetrics(portfolio, aprMoneyMarketFund),
@@ -1029,6 +1062,18 @@ const greetingTemplates = [
 
 function formatGreeting(template: string, name: string) {
   return template.replace("{name}", name || "Investor");
+}
+
+async function loadPortfolioFromCurrentSource({
+  isConfigured,
+  user,
+}: {
+  isConfigured: boolean;
+  user: User | null;
+}) {
+  if (user) return loadCloudPortfolio(user);
+  if (!isConfigured) return localArahDanaStorage.readPortfolio() ?? [];
+  return [];
 }
 
 function getDisplayName(displayName?: string | null, email?: string | null) {
