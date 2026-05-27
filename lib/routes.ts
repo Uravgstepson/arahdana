@@ -2,6 +2,7 @@ export const DEFAULT_AUTHENTICATED_PATH = "/dashboard";
 
 const appRoutePaths = new Set([
   "/",
+  "/about",
   "/alerts",
   "/analysis/new",
   "/analysis/result",
@@ -12,6 +13,7 @@ const appRoutePaths = new Set([
   "/beta-test",
   "/changelog",
   "/dashboard",
+  "/disclaimer",
   "/feedback",
   "/goals",
   "/goals/edit",
@@ -35,10 +37,12 @@ const appRoutePaths = new Set([
   "/porto/import",
   "/porto/manage",
   "/profile",
+  "/privacy",
   "/register",
   "/reports",
   "/review",
   "/settings",
+  "/terms",
   "/watchlist",
 ]);
 

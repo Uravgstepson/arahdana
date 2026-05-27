@@ -2,6 +2,14 @@
 
 ArahDana is a private finance decision-support web app for portfolio tracking, market analysis, DCA goals, alerts, and review reports.
 
+Current release candidate: `v1.0.0-rc1`
+
+Release notes and QA gate:
+
+- `docs/release/v1.0.0-rc1.md`
+- `docs/release/qa-v1.0.0-rc1.md`
+- `docs/internal/beta-feedback-summary-v1.0.0-rc1.md`
+
 ## Local Development
 
 ```bash

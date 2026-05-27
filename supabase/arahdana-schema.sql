@@ -559,6 +559,13 @@ for select
 to authenticated
 using ((select auth.uid()) = user_id);
 
+drop policy if exists "feedback_delete_own" on public.feedback;
+create policy "feedback_delete_own"
+on public.feedback
+for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+
 drop policy if exists "goals_select_own" on public.financial_goals;
 create policy "goals_select_own"
 on public.financial_goals
@@ -695,6 +702,45 @@ on public.beta_test_feedback
 for select
 to authenticated
 using ((select auth.uid()) = user_id);
+
+drop policy if exists "beta_test_feedback_delete_own" on public.beta_test_feedback;
+create policy "beta_test_feedback_delete_own"
+on public.beta_test_feedback
+for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create or replace function public.delete_current_user_account()
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  current_user_id uuid := auth.uid();
+begin
+  if current_user_id is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  delete from public.feedback where user_id = current_user_id;
+  delete from public.beta_test_feedback where user_id = current_user_id;
+  delete from public.portfolio_reports where user_id = current_user_id;
+  delete from public.alert_rules where user_id = current_user_id;
+  delete from public.goal_contributions where user_id = current_user_id;
+  delete from public.financial_goals where user_id = current_user_id;
+  delete from public.analysis_results where user_id = current_user_id;
+  delete from public.watchlist_items where user_id = current_user_id;
+  delete from public.holdings where user_id = current_user_id;
+  delete from public.portfolios where user_id = current_user_id;
+  delete from public.user_settings where user_id = current_user_id;
+  delete from public.profiles where id = current_user_id;
+  delete from auth.users where id = current_user_id;
+end;
+$$;
+
+revoke all on function public.delete_current_user_account() from public;
+grant execute on function public.delete_current_user_account() to authenticated;
 
 -- Refresh PostgREST schema cache after table/policy changes.
 -- This prevents PGRST205 "table not found in schema cache" right after running the migration.

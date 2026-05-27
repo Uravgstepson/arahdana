@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   type ReactNode,
@@ -16,6 +17,7 @@ import type {
   TimeHorizon,
   UserSettings,
 } from "@/lib/types/investment";
+import { AboutArahDana } from "@/components/AboutArahDana";
 import { dispatchToast } from "@/components/ToastViewport";
 import { AccountPanel } from "@/components/AccountPanel";
 import { LoadingState } from "@/components/AppState";
@@ -36,6 +38,7 @@ import {
   saveCloudSettings,
 } from "@/lib/supabase/sync";
 import { normalizeLanguage } from "@/lib/i18n";
+import { deleteCurrentUserAccountAndData } from "@/lib/supabase/account";
 import {
   clampNumber,
   formatRupiah,
@@ -53,10 +56,13 @@ const defaults = DEFAULT_USER_SETTINGS;
 const THEME_KEY = "arahdana.theme";
 
 export default function SettingsPage() {
-  const { isConfigured, isLoading: isAuthLoading, user } = useAuth();
+  const router = useRouter();
+  const { isConfigured, isLoading: isAuthLoading, refreshAuth, user } = useAuth();
   const [settings, setSettings] = useState<UserSettings>(defaults);
   const [preferred, setPreferred] = useState<InvestmentType>("stock");
   const [clearStatus, setClearStatus] = useState("");
+  const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [backupStatus, setBackupStatus] = useState<{
     tone: "success" | "error";
     message: string;
@@ -204,6 +210,48 @@ export default function SettingsPage() {
       setClearStatus(
         error instanceof Error ? `Reset belum selesai. ${error.message}` : "Reset belum selesai.",
       );
+    }
+  }
+
+  async function deleteAccountAndData() {
+    if (!user) {
+      setDeleteAccountStatus("Login dulu untuk menghapus akun dan data.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Hapus akun ArahDana dan semua data yang tersimpan? Tindakan ini tidak bisa dibatalkan.",
+    );
+    if (!confirmed) return;
+
+    const typed = window.prompt(
+      "Ketik HAPUS untuk melanjutkan penghapusan akun dan data.",
+    );
+    if (typed !== "HAPUS") {
+      setDeleteAccountStatus("Penghapusan dibatalkan.");
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    setDeleteAccountStatus("");
+
+    try {
+      await deleteCurrentUserAccountAndData();
+      await refreshAuth();
+      dispatchToast({
+        tone: "success",
+        title: "Data dihapus",
+        message: "Akun dan data ArahDana sudah dihapus.",
+      });
+      router.replace("/login");
+    } catch (error) {
+      setDeleteAccountStatus(
+        error instanceof Error
+          ? `Penghapusan belum selesai. ${error.message}`
+          : "Penghapusan belum selesai.",
+      );
+    } finally {
+      setIsDeletingAccount(false);
     }
   }
 
@@ -566,11 +614,18 @@ export default function SettingsPage() {
           <SettingsLink href="/portfolio" title="Import CSV" />
           <SettingsLink href="/integrations" title="Integrasi" />
           <SettingsLink href="/changelog" title="Changelog" />
-          <SettingsLink href="/feedback" title="Feedback beta" />
+      <SettingsLink href="/feedback" title="Feedback beta" />
           <SettingsLink href="/beta-test" title="Report bug" />
           <SettingsLink href="/onboarding" title="Onboarding" />
         </div>
       </section>
+
+      <SectionHeader
+        title="Tentang"
+        description="Versi rilis, kebijakan, dan kanal feedback."
+      />
+
+      <AboutArahDana />
 
       <SectionHeader
         title="Reset data"
@@ -595,6 +650,30 @@ export default function SettingsPage() {
         {clearStatus ? (
           <p className="mt-3 text-sm font-medium text-emerald-700">
             {clearStatus}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="rounded-lg border border-rose-200 bg-rose-50 p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-rose-800">
+          Hapus akun dan data
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-rose-900/80">
+          Menghapus data akun ArahDana yang kamu miliki: portofolio, watchlist,
+          goals, alert, settings, laporan, hasil analisis, feedback, dan profil
+          akun. Kami akan meminta konfirmasi sebelum melanjutkan.
+        </p>
+        <button
+          type="button"
+          onClick={deleteAccountAndData}
+          disabled={isDeletingAccount || !user}
+          className="mt-4 rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isDeletingAccount ? "Menghapus..." : "Hapus akun dan data"}
+        </button>
+        {deleteAccountStatus ? (
+          <p className="mt-3 text-sm font-medium text-rose-800">
+            {deleteAccountStatus}
           </p>
         ) : null}
       </section>

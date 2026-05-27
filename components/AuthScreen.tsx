@@ -82,6 +82,11 @@ export function AuthScreen({
           <div className="mt-6 grid gap-4">{children}</div>
           <div className="auth-footer mt-5 rounded-[1rem] bg-stone-50 p-4 text-center text-sm text-stone-600 ring-1 ring-stone-200/80">
             {footer}
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-xs font-semibold text-emerald-700">
+              <Link href="/disclaimer">Disclaimer</Link>
+              <Link href="/privacy">Privasi</Link>
+              <Link href="/terms">Ketentuan</Link>
+            </div>
           </div>
         </div>
       </section>

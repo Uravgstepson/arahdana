@@ -1,4 +1,5 @@
 import { DEFAULT_USER_SETTINGS } from "@/lib/settings/defaults";
+import { APP_VERSION } from "@/lib/appMeta";
 import { STORAGE_KEYS } from "@/lib/storage/localStorage";
 import type {
   DataSource,
@@ -46,7 +47,7 @@ export type BackupActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
-const BACKUP_VERSION = "1.0.0-beta.1";
+const BACKUP_VERSION = APP_VERSION;
 const ARAHDANA_STORAGE_PREFIX = "arahdana.";
 
 const investmentTypes = new Set<InvestmentType>([

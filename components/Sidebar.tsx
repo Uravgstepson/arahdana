@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { AboutArahDana } from "@/components/AboutArahDana";
 import { BrandMark } from "@/components/BrandMark";
-import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { APP_VERSION_LABEL } from "@/lib/appMeta";
 import {
   normalizeLanguage,
@@ -60,12 +60,10 @@ const featureMenu: FeatureItem[] = [
 ];
 
 const menuRouteBases = ["/analyzer", "/analysis", "/review", "/alerts"];
-
 export function Sidebar() {
   const pathname = usePathname();
   const language = useLanguagePreference();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isBottomHidden, setIsBottomHidden] = useState(false);
   const lastScrollY = useRef(0);
   const scrollFrame = useRef<number | null>(null);
@@ -319,23 +317,12 @@ export function Sidebar() {
                 </Link>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setIsMenuOpen(false);
-                setIsFeedbackOpen(true);
-              }}
-              className="mt-4 flex min-h-12 w-full items-center justify-center rounded-[1.1rem] bg-emerald-400 px-4 text-sm font-semibold text-stone-950 shadow-[0_10px_24px_rgba(16,185,129,0.18)]"
-            >
-              Kirim masukan
-            </button>
+            <div className="mt-4">
+              <AboutArahDana compact />
+            </div>
           </div>
         </div>
       ) : null}
-      <FeedbackDialog
-        isOpen={isFeedbackOpen}
-        onClose={() => setIsFeedbackOpen(false)}
-      />
     </>
   );
 }

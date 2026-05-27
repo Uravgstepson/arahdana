@@ -1,5 +1,13 @@
 const versions = [
   {
+    version: "v1.0.0 RC",
+    items: [
+      "Google login, secure user-owned Supabase data, and legal/trust pages",
+      "Portfolio tracking, CSV import, Market, Goals, Analysis, privacy mode, and app lock",
+      "Feedback, production monitoring, PWA readiness, and release-candidate documentation",
+    ],
+  },
+  {
     version: "v1.0 Beta",
     items: ["Global error, loading, empty, and API failure states", "Input and CSV validation hardening", "Onboarding, changelog, feedback, and beta disclaimer"],
   },

@@ -39,6 +39,7 @@ const titleKeys: Record<string, TranslationKey> = {
 };
 
 const fallbackTitles: Record<string, string> = {
+  "/about": "Tentang ArahDana",
   "/goals": "Tujuan",
   "/goals/new": "Tujuan Baru",
   "/goals/edit": "Edit Tujuan",
@@ -60,6 +61,9 @@ const fallbackTitles: Record<string, string> = {
   "/changelog": "Changelog",
   "/feedback": "Feedback",
   "/beta-test": "Beta Test",
+  "/disclaimer": "Disclaimer",
+  "/privacy": "Privasi",
+  "/terms": "Ketentuan",
   "/login": "Login",
   "/register": "Register",
   "/auth/confirm": "Konfirmasi Email",
@@ -71,9 +75,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const isPublicRoute =
     pathname === "/" ||
+    pathname === "/about" ||
     pathname === "/beta" ||
+    pathname === "/disclaimer" ||
     pathname === "/login" ||
+    pathname === "/privacy" ||
     pathname === "/register" ||
+    pathname === "/terms" ||
     pathname === "/auth/confirm";
   const language = useLanguagePreference();
   const title = titleKeys[pathname]
