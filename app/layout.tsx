@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { AuthProvider } from "@/components/AuthProvider";
 import { AppShell } from "@/components/AppShell";
+import { NativeShellBridge } from "@/components/NativeShellBridge";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import "./globals.css";
 
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="id">
       <body>
         <PwaRegistration />
+        <NativeShellBridge />
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>

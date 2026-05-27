@@ -1,4 +1,5 @@
 import type { DataSource, PricePoint } from "@/lib/types/investment";
+import { fetchMarketQuote } from "@/lib/market/marketDataClient";
 import { normalizeMarketTicker } from "@/lib/market/tickerUniverse";
 
 export type MarketApiResponse = {
@@ -25,6 +26,30 @@ export async function fetchPublicMarketData({
   live?: boolean;
   source?: "auto" | "google" | "yahoo";
 }) {
+  if (source === "auto") {
+    const quote = await fetchMarketQuote(normalizeMarketTicker(ticker)).catch(
+      () => null,
+    );
+    if (quote?.price) {
+      const updatedDate = quote.updated_at
+        ? new Date(quote.updated_at).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+      return {
+        source: quote.source,
+        ticker: normalizeMarketTicker(ticker),
+        currency: quote.currency,
+        exchangeName: quote.market_status,
+        regularMarketPrice: quote.price,
+        prices: [{ date: updatedDate, close: quote.price }],
+        message: quote.is_delayed ? "Data tertunda" : undefined,
+      } satisfies MarketApiResponse;
+    }
+
+    throw new Error(
+      "Harga otomatis belum tersedia. Gunakan input manual sampai quote cache provider aktif.",
+    );
+  }
+
   const params = new URLSearchParams({
     ticker: normalizeMarketTicker(ticker),
     source,

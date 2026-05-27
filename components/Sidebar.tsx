@@ -179,6 +179,20 @@ export function Sidebar() {
     return () => window.clearTimeout(timeoutId);
   }, [pathname]);
 
+  useEffect(() => {
+    function handleNativeBack(event: Event) {
+      if (!isMenuOpen) return;
+      setIsMenuOpen(false);
+      const detail = event instanceof CustomEvent ? event.detail : null;
+      if (typeof detail?.closeSheet === "function") detail.closeSheet();
+    }
+
+    window.addEventListener("arahdana:native-back", handleNativeBack);
+    return () => {
+      window.removeEventListener("arahdana:native-back", handleNativeBack);
+    };
+  }, [isMenuOpen]);
+
   return (
     <>
       <aside className="motion-nav fixed inset-y-6 left-5 z-50 hidden w-[5rem] flex-col items-center rounded-[1.45rem] border border-white/12 bg-stone-950/68 px-2 py-4 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-[18px] lg:flex">

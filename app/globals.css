@@ -94,13 +94,12 @@ body {
       rgba(237, 243, 247, 0.88) 48%,
       rgba(232, 238, 244, 1) 100%
     ),
-    url("/icons/Background%20For%20Desktop.png"), var(--background);
-  background-attachment: fixed, fixed, scroll;
+    var(--background);
+  background-attachment: fixed, scroll;
   background-position:
     center top,
-    center top,
     center;
-  background-size: cover, cover, auto;
+  background-size: cover, auto;
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -143,13 +142,12 @@ body::before {
       rgba(238, 245, 242, 0.72) 48%,
       rgba(238, 245, 242, 0.92) 100%
     ),
-    url("/icons/Background%20For%20Desktop.png"), #eef5f2;
-  background-attachment: fixed, fixed, scroll;
+    #eef5f2;
+  background-attachment: fixed, scroll;
   background-position:
     center top,
-    center top,
     center;
-  background-size: cover, cover, auto;
+  background-size: cover, auto;
 }
 
 .public-art-background::before {
@@ -573,6 +571,21 @@ thead {
   color: #e5eef8;
 }
 
+:root[data-native-shell] {
+  background: #03140f;
+}
+
+:root[data-native-shell] body {
+  background: linear-gradient(180deg, #03140f 0%, #edf3f7 18%, #edf3f7 100%);
+  overscroll-behavior: none;
+}
+
+:root[data-native-shell] .app-header-title-zone,
+:root[data-native-shell] .app-header-actions,
+:root[data-native-shell] .motion-nav {
+  transform: translateZ(0);
+}
+
 .profile-popover {
   transform-origin: top right;
 }
@@ -839,13 +852,12 @@ section,
         rgba(255, 255, 255, 0.94) 0%,
         rgba(237, 243, 247, 1) 100%
       ),
-      url("/icons/Background%20For%20Mobile.png"), var(--background);
-    background-attachment: scroll, fixed, scroll;
+      var(--background);
+    background-attachment: scroll, scroll;
     background-position:
       center top,
-      center top,
       center;
-    background-size: cover, cover, auto;
+    background-size: cover, auto;
   }
 
   body::before {
@@ -868,13 +880,12 @@ section,
         rgba(238, 245, 242, 0.76) 56%,
         rgba(238, 245, 242, 0.96) 100%
       ),
-      url("/icons/Background%20For%20Mobile.png"), #eef5f2;
-    background-attachment: scroll, fixed, scroll;
+      #eef5f2;
+    background-attachment: scroll, scroll;
     background-position:
       center top,
-      center top,
       center;
-    background-size: cover, cover, auto;
+    background-size: cover, auto;
   }
 
   .public-art-background::before {

@@ -2,13 +2,15 @@
 
 ArahDana is a private finance decision-support web app for portfolio tracking, market analysis, DCA goals, alerts, and review reports.
 
-Current release candidate: `v1.0.0-rc1`
+Current release track: `v1.1.0`
 
 Release notes and QA gate:
 
 - `docs/release/v1.0.0-rc1.md`
 - `docs/release/qa-v1.0.0-rc1.md`
 - `docs/internal/beta-feedback-summary-v1.0.0-rc1.md`
+- `docs/native/capacitor.md`
+- `docs/market-data-v1.1.md`
 
 ## Local Development
 
@@ -29,6 +31,27 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
 Use the Supabase project URL and anon/publishable browser key. Do not use a service-role key in this app.
+
+Market provider keys are for Supabase Edge Function secrets only. Do not expose them with `NEXT_PUBLIC_` names:
+
+```bash
+MARKET_PROVIDER=
+ALPHA_VANTAGE_API_KEY=
+TWELVE_DATA_API_KEY=
+FINNHUB_API_KEY=
+IDX_PROVIDER_API_KEY=
+```
+
+## Native Shell
+
+Capacitor Android support is available without replacing the web/PWA deployment:
+
+```bash
+npm run cap:sync:android
+npm run cap:open:android
+```
+
+See `docs/native/capacitor.md`.
 
 ## Supabase Auth
 

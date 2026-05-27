@@ -35,6 +35,8 @@ type HoldingRow = {
   buy_price: number;
   quantity: number;
   current_price: number;
+  market_asset_id: string | null;
+  price_tracking_mode: PortfolioItem["priceTrackingMode"] | null;
   buy_date: string;
   notes: string | null;
   risk_category: RiskCategory;
@@ -155,7 +157,7 @@ export async function loadCloudPortfolio(user: User) {
   const portfolioId = await getOrCreateDefaultPortfolioId(user);
   const { data, error } = await supabase
     .from("holdings")
-    .select("id,local_id,name,type,ticker,buy_price,quantity,current_price,buy_date,notes,risk_category,data_source,last_price_updated_at")
+    .select("id,local_id,name,type,ticker,buy_price,quantity,current_price,market_asset_id,price_tracking_mode,buy_date,notes,risk_category,data_source,last_price_updated_at")
     .eq("user_id", user.id)
     .eq("portfolio_id", portfolioId)
     .order("created_at", { ascending: false });
@@ -188,6 +190,8 @@ export async function saveCloudPortfolio(user: User, items: PortfolioItem[]) {
     buy_price: item.buyPrice,
     quantity: item.quantity,
     current_price: item.currentPrice,
+    market_asset_id: item.marketAssetId ?? null,
+    price_tracking_mode: item.priceTrackingMode ?? "manual",
     buy_date: safeDate(item.buyDate),
     notes: nullableText(item.notes),
     risk_category: item.riskCategory,
@@ -701,6 +705,8 @@ function rowToPortfolioItem(row: HoldingRow): PortfolioItem {
     name: row.name,
     type: row.type,
     ticker: row.ticker ?? "",
+    marketAssetId: row.market_asset_id ?? undefined,
+    priceTrackingMode: row.price_tracking_mode === "auto" ? "auto" : "manual",
     buyPrice: nonNegativeNumber(row.buy_price),
     quantity: nonNegativeNumber(row.quantity),
     currentPrice: nonNegativeNumber(row.current_price),
@@ -872,6 +878,8 @@ function normalizePortfolioForCloud(items: PortfolioItem[]) {
         buyPrice: nonNegativeNumber(item.buyPrice),
         quantity: nonNegativeNumber(item.quantity),
         currentPrice: nonNegativeNumber(item.currentPrice),
+        marketAssetId: item.marketAssetId,
+        priceTrackingMode: item.priceTrackingMode === "auto" ? "auto" : "manual",
         buyDate: safeDate(item.buyDate),
         riskCategory: isRiskCategory(item.riskCategory) ? item.riskCategory : "medium",
         dataSource: item.dataSource ?? "manual_input",

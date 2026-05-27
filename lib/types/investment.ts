@@ -103,6 +103,8 @@ export type PortfolioItem = {
   name: string;
   type: InvestmentType;
   ticker?: string;
+  marketAssetId?: string;
+  priceTrackingMode?: "manual" | "auto";
   buyPrice: number;
   quantity: number;
   currentPrice: number;

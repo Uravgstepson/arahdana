@@ -27,11 +27,11 @@ export default function AboutPage() {
       </div>
 
       <section className="mt-5 rounded-[1.4rem] border border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Release candidate</h2>
+        <h2 className="text-lg font-semibold">Native + market foundation</h2>
         <p className="mt-2 text-sm leading-7 text-stone-600">
-          Build ini dikunci sebagai {APP_RELEASE_TAG}. Fokusnya stabilitas,
-          data pengguna yang aman, dan alur inti yang siap dipakai untuk beta
-          privat.
+          Build ini berjalan di track {APP_RELEASE_TAG}. Fokusnya native shell,
+          data market yang diproxy lewat backend, dan pengalaman fintech yang
+          tetap tenang.
         </p>
       </section>
     </main>

@@ -12,6 +12,7 @@ export type HoldingDraft = {
   buyPrice: string;
   quantity: string;
   currentPrice: string;
+  priceTrackingMode: "manual" | "auto";
   buyDate: string;
   riskCategory: RiskCategory;
   notes: string;
@@ -79,6 +80,7 @@ export function createHoldingDraft(
     buyPrice: "",
     quantity: "1",
     currentPrice: "",
+    priceTrackingMode: "manual",
     buyDate: new Date().toISOString().slice(0, 10),
     riskCategory: "medium",
     notes: "",
@@ -94,6 +96,7 @@ export function portfolioItemToDraft(item: PortfolioItem): HoldingDraft {
     buyPrice: String(nonNegativeNumber(item.buyPrice)),
     quantity: String(nonNegativeNumber(item.quantity)),
     currentPrice: String(nonNegativeNumber(item.currentPrice)),
+    priceTrackingMode: item.priceTrackingMode === "auto" ? "auto" : "manual",
     buyDate: item.buyDate || new Date().toISOString().slice(0, 10),
     riskCategory: item.riskCategory,
     notes: item.notes ?? "",
@@ -129,6 +132,7 @@ export function draftToPortfolioItem(
     buyDate: draft.buyDate || new Date().toISOString().slice(0, 10),
     notes: draft.notes.trim(),
     riskCategory: draft.riskCategory,
+    priceTrackingMode: draft.priceTrackingMode,
     dataSource: "manual_input",
   };
 }

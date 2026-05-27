@@ -379,6 +379,38 @@ export default function PortoAddPage() {
               />
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => update({ priceTrackingMode: "manual" })}
+                className={`rounded-[1rem] p-3 text-left ring-1 ${
+                  draft.priceTrackingMode === "manual"
+                    ? "bg-emerald-50 text-emerald-950 ring-emerald-200"
+                    : "bg-stone-50 text-stone-700 ring-stone-200"
+                }`}
+              >
+                <span className="block text-sm font-semibold">Manual</span>
+                <span className="mt-1 block text-xs opacity-70">
+                  Pakai harga kini yang kamu isi.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => update({ priceTrackingMode: "auto" })}
+                className={`rounded-[1rem] p-3 text-left ring-1 ${
+                  draft.priceTrackingMode === "auto"
+                    ? "bg-emerald-50 text-emerald-950 ring-emerald-200"
+                    : "bg-stone-50 text-stone-700 ring-stone-200"
+                }`}
+              >
+                <span className="block text-sm font-semibold">
+                  Auto price tracking
+                </span>
+                <span className="mt-1 block text-xs opacity-70">
+                  ArahDana mencoba memakai quote cache jika ticker cocok.
+                </span>
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
               {riskChoices.map((choice) => (
                 <button
                   key={choice.value}
@@ -413,6 +445,14 @@ export default function PortoAddPage() {
             <SummaryRow label="Instrumen" value={draft.name || "-"} />
             <SummaryRow label="Produk" value={productTypeLabel(draft.type)} />
             <SummaryRow label="Ticker" value={draft.ticker || "Opsional"} />
+            <SummaryRow
+              label="Mode harga"
+              value={
+                draft.priceTrackingMode === "auto"
+                  ? "Auto price tracking"
+                  : "Manual"
+              }
+            />
             <SummaryRow label="Modal" value={formatRupiah(preview.invested)} />
             <SummaryRow label="Nilai kini" value={formatRupiah(preview.value)} />
           </div>

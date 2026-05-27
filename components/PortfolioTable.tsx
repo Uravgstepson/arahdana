@@ -418,14 +418,16 @@ export function PortfolioTable() {
   }
 
   async function refreshPrices() {
-    const refreshableItems = items.filter((item) => item.ticker?.trim());
+    const refreshableItems = items.filter(
+      (item) => item.ticker?.trim() && item.priceTrackingMode === "auto",
+    );
 
     setRefreshMessage("");
     setRefreshError("");
 
     if (refreshableItems.length === 0) {
       setRefreshError(
-        "Tidak ada ticker. Tambahkan ticker seperti BBCA.JK, BBRI.JK, TLKM.JK, atau ASII.JK dulu.",
+        "Tidak ada holding dengan auto price tracking. Aktifkan mode Auto pada holding yang punya ticker.",
       );
       return;
     }
@@ -495,7 +497,7 @@ export function PortfolioTable() {
 
       setRefreshMessage(
         updates.size > 0
-          ? `${updates.size} harga diperbarui dari data pasar publik langsung.`
+          ? `${updates.size} harga diperbarui dari cache/provider market.`
           : "",
       );
       setRefreshError(
@@ -943,6 +945,13 @@ const HoldingRow = memo(function HoldingRow({
                     {holding.item.ticker}
                   </span>
                 ) : null}
+                <span className="inline-flex min-h-7 items-center rounded-full bg-emerald-50 px-2.5 text-[0.68rem] font-bold leading-none text-emerald-800 ring-1 ring-emerald-100">
+                  {holding.item.priceTrackingMode === "auto"
+                    ? holding.item.dataSource === "live_public_market_data"
+                      ? "Auto price"
+                      : "Harga otomatis belum tersedia"
+                    : "Manual"}
+                </span>
               </div>
             </div>
             <div className="min-w-0 text-left sm:text-right">
@@ -1256,6 +1265,9 @@ function normalizePortfolioItem(item: PortfolioItem): PortfolioItem {
     buyPrice: nonNegativeNumber(item.buyPrice),
     quantity: nonNegativeNumber(item.quantity),
     currentPrice: nonNegativeNumber(item.currentPrice),
+    marketAssetId: item.marketAssetId,
+    priceTrackingMode:
+      item.priceTrackingMode === "auto" ? "auto" : "manual",
     riskCategory: isRiskCategory(item.riskCategory)
       ? item.riskCategory
       : "medium",

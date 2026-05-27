@@ -1,5 +1,13 @@
 const versions = [
   {
+    version: "v1.1",
+    items: [
+      "Capacitor Android native shell foundation with splash, status bar, back button, and haptics",
+      "Supabase Edge Function market data architecture with cached quote tables",
+      "Portfolio auto price tracking mode and delayed-data labels",
+    ],
+  },
+  {
     version: "v1.0.0 RC",
     items: [
       "Google login, secure user-owned Supabase data, and legal/trust pages",

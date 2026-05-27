@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { InvestmentLogo } from "@/components/InvestmentLogo";
 import type { WatchlistItem } from "@/lib/types/investment";
@@ -12,6 +12,7 @@ import {
   searchMarketAssets,
   type MarketAsset,
 } from "@/lib/market/discovery";
+import { fetchMarketInsight } from "@/lib/market/marketDataClient";
 
 const RECENT_MARKET_SEARCHES_KEY = "arahdana.market.recentSearches";
 
@@ -43,7 +44,7 @@ const marketProductSegments = [
   {
     eyebrow: "IDX market",
     title: "Saham",
-    description: "Saham Indonesia populer dengan pergerakan harga terbaru.",
+    description: "Saham Indonesia populer dengan quote cache saat provider aktif.",
     href: "/market-prices?category=idx_stock",
     tone: "dark",
     icon: "candle",
@@ -208,7 +209,7 @@ function SearchSuggestionList({
             </span>
           </span>
           <span className={cn("shrink-0 text-xs font-bold", directionText(asset))}>
-            {asset.change}
+            Cache
           </span>
         </button>
       ))}
@@ -278,7 +279,8 @@ function SearchResult({
             </div>
             <p className="mt-2 text-sm leading-6 text-stone-600">{asset.overview}</p>
             <p className="mt-4 rounded-[1rem] bg-emerald-50 px-4 py-3 text-sm font-medium leading-6 text-emerald-900 ring-1 ring-emerald-100">
-              {asset.insight}
+              Quote cache akan ditampilkan setelah data provider tersedia.
+              Insight ini bersifat informatif, bukan rekomendasi investasi.
             </p>
           </div>
         </div>
@@ -286,11 +288,15 @@ function SearchResult({
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
             Price
           </p>
-          <p className="mt-2 text-2xl font-semibold text-stone-950">{asset.value}</p>
-          <p className={cn("mt-1 text-sm font-semibold", directionText(asset))}>
-            {asset.change}
+          <p className="mt-2 text-2xl font-semibold text-stone-950">
+            Harga belum tersedia
           </p>
-          <Sparkline trend={asset.trend} direction={asset.direction} />
+          <p className={cn("mt-1 text-sm font-semibold", directionText(asset))}>
+            Data tertunda
+          </p>
+          <p className="mt-3 text-xs font-semibold leading-5 text-stone-500">
+            Menunggu quote cache dari provider.
+          </p>
         </div>
       </div>
 
@@ -312,9 +318,9 @@ function SearchResult({
 
 function PantauSection({ watchlist }: { watchlist: WatchlistItem[] }) {
   const fallback = [
-    { name: "BBCA", ticker: "BBCA", price: "Rp 9.400", target: "Rp 10.200", status: "Dipantau" },
-    { name: "IHSG", ticker: "IHSG", price: "6.950", target: "Arah pasar", status: "Aman" },
-    { name: "Bitcoin", ticker: "BTC", price: "Rp 1.08 M", target: "Volatilitas", status: "Volatil" },
+    { name: "BBCA", ticker: "BBCA", price: "Harga belum tersedia", target: "Contoh pantauan", status: "Dipantau" },
+    { name: "IHSG", ticker: "IHSG", price: "Harga belum tersedia", target: "Arah pasar", status: "Menunggu" },
+    { name: "Bitcoin", ticker: "BTC", price: "Harga belum tersedia", target: "Volatilitas", status: "Menunggu" },
   ];
   const items =
     watchlist.length > 0
@@ -323,7 +329,7 @@ function PantauSection({ watchlist }: { watchlist: WatchlistItem[] }) {
           return {
             name: item.name,
             ticker: asset?.ticker,
-            price: asset?.value ?? "Manual",
+            price: "Harga belum tersedia",
             target: item.targetBuyZone || "Target belum diisi",
             status: watchlistStatusLabel(item.status),
           };
@@ -433,12 +439,34 @@ function MarketOverviewSection() {
 }
 
 function MarketInsightSection() {
-  const insights = [
-    "IHSG melemah 1.2% hari ini, tetapi tekanan masih terkendali.",
-    "Emas menguat akibat permintaan defensif dan pelemahan selera risiko.",
-    "Sektor perbankan masih dominan minggu ini.",
-    "Pasar obligasi relatif stabil dengan pergerakan yield terbatas.",
+  const fallbackInsights = [
+    "Insight market akan muncul setelah quote cache tersedia.",
+    "Jika provider sedang limit, ArahDana menampilkan cache terakhir dan waktu pembaruan.",
   ];
+  const [insights, setInsights] = useState(fallbackInsights);
+  const [disclaimer, setDisclaimer] = useState(
+    "Insight ini bersifat informatif, bukan rekomendasi investasi.",
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMarketInsight(["^JKSE", "BTC/USD", "USD/IDR"])
+      .then((result) => {
+        if (cancelled) return;
+        if (result.insights.length > 0) setInsights(result.insights);
+        setDisclaimer(result.disclaimer);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setInsights([
+            "Insight market belum tersedia. ArahDana tetap memakai cache atau data manual bila provider gagal.",
+          ]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
@@ -457,6 +485,9 @@ function MarketInsightSection() {
           </p>
         ))}
       </div>
+      <p className="mt-4 rounded-[1rem] bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800 ring-1 ring-amber-100">
+        {disclaimer}
+      </p>
     </section>
   );
 }
@@ -491,52 +522,6 @@ function MarketTag({ children }: { children: ReactNode }) {
       {children}
     </span>
   );
-}
-
-function Sparkline({
-  trend,
-  direction,
-  compact = false,
-}: {
-  trend: number[];
-  direction: MarketAsset["direction"];
-  compact?: boolean;
-}) {
-  const points = sparklinePoints(trend, compact ? 92 : 132, compact ? 38 : 48);
-  const stroke =
-    direction === "up" ? "#059669" : direction === "down" ? "#be123c" : "#64748b";
-
-  return (
-    <svg
-      className={cn("shrink-0", compact ? "h-10 w-24" : "mt-3 h-12 w-full")}
-      viewBox={`0 0 ${compact ? 92 : 132} ${compact ? 38 : 48}`}
-      aria-hidden="true"
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke={stroke}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="3"
-      />
-    </svg>
-  );
-}
-
-function sparklinePoints(values: number[], width: number, height: number) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const step = values.length > 1 ? width / (values.length - 1) : width;
-
-  return values
-    .map((value, index) => {
-      const x = index * step;
-      const y = height - 6 - ((value - min) / range) * (height - 12);
-      return `${Math.round(x)},${Math.round(y)}`;
-    })
-    .join(" ");
 }
 
 function productSegmentClass(tone: string) {

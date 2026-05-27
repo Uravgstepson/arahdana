@@ -31,7 +31,7 @@ export default function OnboardingPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <section className="premium-gradient-surface overflow-hidden rounded-[1.8rem] p-6 text-white">
-        <p className="text-sm font-medium text-white/62">ArahDana v1.0.0 RC</p>
+        <p className="text-sm font-medium text-white/62">ArahDana v1.1</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight">Mulai dengan batasan yang jelas</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
           ArahDana dibuat sebagai alat bantu pencatatan dan analisis awal. Gunakan untuk membuat keputusan lebih terstruktur, bukan untuk menyerahkan keputusan investasi.

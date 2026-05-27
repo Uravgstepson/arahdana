@@ -56,10 +56,10 @@ export default function LandingPage() {
                 Lihat fitur
               </Link>
               <Link
-                href="/dashboard"
+                href="/login"
                 className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-stone-950 shadow-sm"
               >
-                Masuk ke App
+                Masuk
               </Link>
             </nav>
           </header>
@@ -83,10 +83,10 @@ export default function LandingPage() {
                   Mulai sekarang
                 </Link>
                 <Link
-                  href="/dashboard"
+                  href="/login"
                   className="inline-flex min-h-12 items-center justify-center rounded-[1rem] bg-white/10 px-5 text-sm font-semibold text-white ring-1 ring-white/12 hover:bg-white/15"
                 >
-                  Masuk ke App
+                  Masuk
                 </Link>
                 <Link
                   href="#fitur"
@@ -152,12 +152,30 @@ export default function LandingPage() {
             <p className="mt-4 text-sm leading-6 text-white/68">
               ArahDana adalah alat pendukung keputusan. Hasil analisis, alerts, dan reports tidak menjamin keuntungan dan tidak menggantikan riset pribadi atau konsultasi profesional.
             </p>
-            <Link
-              href="/beta"
-              className="mt-6 inline-flex rounded-[1rem] bg-emerald-400 px-5 py-3 text-sm font-semibold text-stone-950"
-            >
-              Join beta
-            </Link>
+            <p className="mt-4 text-sm leading-6 text-white/68">
+              Data pribadi tidak ditampilkan di landing page. Di browser mobile,
+              ArahDana bisa dipasang sebagai PWA dari menu browser.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <Link
+                href="/beta"
+                className="inline-flex rounded-[1rem] bg-emerald-400 px-5 py-3 text-sm font-semibold text-stone-950"
+              >
+                Mulai sekarang
+              </Link>
+              <Link
+                href="/privacy"
+                className="inline-flex rounded-[1rem] bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/12"
+              >
+                Privasi
+              </Link>
+              <Link
+                href="/disclaimer"
+                className="inline-flex rounded-[1rem] bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/12"
+              >
+                Disclaimer
+              </Link>
+            </div>
           </div>
         </div>
       </section>

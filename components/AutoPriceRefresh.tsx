@@ -41,6 +41,7 @@ export function AutoPriceRefresh() {
         : localArahDanaStorage.readPortfolio() ?? [];
       const candidates = portfolio
         .filter((item) => item.ticker?.trim())
+        .filter((item) => item.priceTrackingMode === "auto")
         .filter((item) => priceLooksStale(item, now))
         .slice(0, maxTickersPerPass);
 

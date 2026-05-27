@@ -213,6 +213,39 @@ export default function PortoEditPage() {
           />
         </div>
 
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => update({ priceTrackingMode: "manual" })}
+            className={`rounded-[1rem] p-3 text-left ring-1 ${
+              state.draft.priceTrackingMode === "manual"
+                ? "bg-emerald-50 text-emerald-950 ring-emerald-200"
+                : "bg-stone-50 text-stone-700 ring-stone-200"
+            }`}
+          >
+            <span className="block text-sm font-semibold">Manual</span>
+            <span className="mt-1 block text-xs opacity-70">
+              Harga kini tetap mengikuti input kamu.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => update({ priceTrackingMode: "auto" })}
+            className={`rounded-[1rem] p-3 text-left ring-1 ${
+              state.draft.priceTrackingMode === "auto"
+                ? "bg-emerald-50 text-emerald-950 ring-emerald-200"
+                : "bg-stone-50 text-stone-700 ring-stone-200"
+            }`}
+          >
+            <span className="block text-sm font-semibold">
+              Auto price tracking
+            </span>
+            <span className="mt-1 block text-xs opacity-70">
+              Pakai quote cache jika tersedia, tanpa mengubah harga beli.
+            </span>
+          </button>
+        </div>
+
         <div className="grid gap-2 sm:grid-cols-3">
           {productTypeChoices.map((choice) => (
             <button
@@ -292,6 +325,14 @@ export default function PortoEditPage() {
         {preview ? (
           <div className="grid gap-2 rounded-[1.2rem] bg-stone-50 p-4 ring-1 ring-stone-200">
             <SummaryRow label="Produk" value={productTypeLabel(state.draft.type)} />
+            <SummaryRow
+              label="Mode harga"
+              value={
+                state.draft.priceTrackingMode === "auto"
+                  ? "Auto price tracking"
+                  : "Manual"
+              }
+            />
             <SummaryRow label="Modal" value={formatRupiah(preview.invested)} />
             <SummaryRow label="Nilai kini" value={formatRupiah(preview.value)} />
           </div>
