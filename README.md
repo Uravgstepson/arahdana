@@ -61,7 +61,7 @@ Add these redirect URLs in Supabase Auth URL Configuration:
 
 ```text
 http://localhost:3000/auth/callback
-https://YOUR-VERCEL-APP.vercel.app/auth/callback
+https://arahdana-rosy.vercel.app/auth/callback
 https://arahdana.id/auth/callback
 ```
 
